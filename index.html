@@ -1,435 +1,242 @@
--- =========================================================
--- DATABASE ONLINE TOOL KONTROL PENJUALAN
--- VERSI PERBAIKAN (policy admin_users & casting auth.uid()::uuid)
--- =========================================================
-
-create extension if not exists pgcrypto;
-
-
--- =========================================================
--- 1. TABEL PRODUCTS
--- =========================================================
-
-create table if not exists public.products (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  price numeric(14,2) not null default 0 check (price >= 0),
-  active boolean not null default true,
-  created_at timestamptz not null default now()
-);
-
--- Index nama produk (menggunakan lower(name) agar case-insensitive)
-create unique index if not exists products_name_unique
-on public.products (lower(name));
-
-
--- =========================================================
--- 2. TABEL SETTINGS
--- =========================================================
-
-create table if not exists public.settings (
-  id integer primary key default 1,
-  target_pcs integer not null default 0 check (target_pcs >= 0),
-  target_omzet numeric(14,2) not null default 0 check (target_omzet >= 0),
-  updated_at timestamptz not null default now()
-);
-
--- Pastikan baris settings tersedia
-insert into public.settings
-  (id, target_pcs, target_omzet)
-select
-  1, 0, 0
-where not exists (
-  select 1
-  from public.settings
-  where id = 1
-);
-
-
--- =========================================================
--- 3. TABEL ADMIN USERS
--- =========================================================
-
-create table if not exists public.admin_users (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now()
-);
-
-
--- =========================================================
--- 4. TABEL SALES
--- =========================================================
-
-create table if not exists public.sales (
-  id uuid primary key default gen_random_uuid(),
-
-  cashier_user_id uuid references auth.users(id) on delete set null,
-  cashier_name text,
-
-  shift text,
-
-  product_id uuid references public.products(id) on delete set null,
-
-  product_name text not null,
-
-  unit_price numeric(14,2) not null default 0
-    check (unit_price >= 0),
-
-  qty integer not null default 1
-    check (qty > 0),
-
-  total numeric(14,2) not null default 0
-    check (total >= 0),
-
-  sold_at timestamptz not null default now()
-);
-
-
--- =========================================================
--- 5. INDEX PENJUALAN
--- =========================================================
-
-create index if not exists sales_sold_at_idx
-on public.sales (sold_at);
-
-create index if not exists sales_cashier_name_idx
-on public.sales (cashier_name);
-
-create index if not exists sales_product_id_idx
-on public.sales (product_id);
-
-
--- =========================================================
--- 6. FUNCTION OTOMATIS HARGA PENJUALAN
--- =========================================================
-
-create or replace function public.validate_sale()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  p_name text;
-  p_price numeric(14,2);
-begin
-
-  -- Jika product_id digunakan
-  if new.product_id is not null then
-
-    select
-      name,
-      price
-    into
-      p_name,
-      p_price
-    from public.products
-    where id = new.product_id
-      and active = true;
-
-    -- Produk harus aktif
-    if p_name is null then
-      raise exception 'Produk tidak ditemukan atau sudah tidak aktif';
-    end if;
-
-    -- Ambil harga terbaru dari database
-    new.product_name := p_name;
-    new.unit_price := p_price;
-
-  end if;
-
-  -- Hitung total otomatis
-  new.total := round(new.unit_price * new.qty, 2);
-
-  return new;
-end;
-$$;
-
-
--- NOTE: Fungsi ini dibuat SECURITY DEFINER. Pastikan owner fungsi adalah role yang benar
--- (service account / db owner) dan bukan role dengan privilege terbatas. Sesuaikan owner
--- jika perlu, mis.:
---   alter function public.validate_sale() owner to postgres; -- sesuaikan role target
-
-
--- =========================================================
--- 7. TRIGGER PENJUALAN
--- =========================================================
-
-drop trigger if exists sales_validate_before_insert
-on public.sales;
-
-create trigger sales_validate_before_insert
-before insert on public.sales
-for each row
-execute function public.validate_sale();
-
-
--- =========================================================
--- 8. AKTIFKAN RLS
--- =========================================================
-
-alter table public.products enable row level security;
-alter table public.settings enable row level security;
-alter table public.admin_users enable row level security;
-alter table public.sales enable row level security;
-
-
--- =========================================================
--- 9. HAPUS POLICY LAMA
--- =========================================================
-
-drop policy if exists "Public can view active products"
-on public.products;
-
-drop policy if exists "Admins can manage products"
-on public.products;
-
-drop policy if exists "Admins can manage settings"
-on public.settings;
-
-drop policy if exists "Admins can manage admin users"
-on public.admin_users;
-
-drop policy if exists "Anyone can insert sales"
-on public.sales;
-
-drop policy if exists "Admins can read sales"
-on public.sales;
-
-drop policy if exists "Admins can delete sales"
-on public.sales;
-
-
--- =========================================================
--- 10. POLICY PRODUCTS
--- =========================================================
-
-create policy "Public can view active products"
-on public.products
-for select
-to anon, authenticated
-using (active = true);
-
-
-create policy "Admins can manage products"
-on public.products
-for all
-to authenticated
-using (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-);
-
-
--- =========================================================
--- 11. POLICY SETTINGS
--- =========================================================
-
-create policy "Admins can manage settings"
-on public.settings
-for all
-to authenticated
-using (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-);
-
-
--- =========================================================
--- 12. POLICY ADMIN USERS
--- =========================================================
--- PENTING: kebijakan ini TIDAK mengizinkan self-insert. Hanya user yang sudah menjadi admin
--- (ada di public.admin_users) yang dapat mengelola admin_users.
-
-create policy "Admins can manage admin users"
-on public.admin_users
-for all
-to authenticated
-using (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-);
-
-
--- =========================================================
--- 13. POLICY SALES
--- =========================================================
-
-create policy "Anyone can insert sales"
-on public.sales
-for insert
-to anon, authenticated
-with check (true);
-
-
-create policy "Admins can read sales"
-on public.sales
-for select
-to authenticated
-using (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-);
-
-
-create policy "Admins can delete sales"
-on public.sales
-for delete
-to authenticated
-using (
-  exists (
-    select 1
-    from public.admin_users
-    where user_id = auth.uid()::uuid
-  )
-);
-
-
--- =========================================================
--- 14. IZIN AKSES
--- =========================================================
-
-grant usage on schema public to anon, authenticated;
-
-grant select on public.products
-to anon, authenticated;
-
-grant insert on public.sales
-to anon, authenticated;
-
-grant select, insert, update, delete
-on public.sales
-to authenticated;
-
-grant select, insert, update
-on public.settings
-to authenticated;
-
-grant select, insert, update, delete
-on public.products
-to authenticated;
-
-grant select, insert, update, delete
-on public.admin_users
-to authenticated;
-
-
--- =========================================================
--- 15. PRODUK AWAL
--- TIDAK MENGGUNAKAN ON CONFLICT (karena index expression lower(name))
--- =========================================================
-
-insert into public.products (name, price, active)
-select 'GB BEAUTY', 2900, true
-where not exists (
-  select 1
-  from public.products
-  where lower(name) = lower('GB BEAUTY')
-);
-
-insert into public.products (name, price, active)
-select 'INDOMIE BANDIT', 15000, true
-where not exists (
-  select 1
-  from public.products
-  where lower(name) = lower('INDOMIE BANDIT')
-);
-
-insert into public.products (name, price, active)
-select 'Produk A', 50000, true
-where not exists (
-  select 1
-  from public.products
-  where lower(name) = lower('Produk A')
-);
-
-insert into public.products (name, price, active)
-select 'Produk B', 75000, true
-where not exists (
-  select 1
-  from public.products
-  where lower(name) = lower('Produk B')
-);
-
-
--- =========================================================
--- 16. REALTIME UNTUK LAPORAN PENJUALAN
--- =========================================================
-
-do $$
-begin
-  if exists (
-    select 1
-    from pg_publication
-    where pubname = 'supabase_realtime'
-  ) then
-
-    if not exists (
-      select 1
-      from pg_publication_tables
-      where pubname = 'supabase_realtime'
-        and schemaname = 'public'
-        and tablename = 'sales'
-    ) then
-
-      alter publication supabase_realtime
-      add table public.sales;
-
-    end if;
-
-  end if;
-end $$;
-
-
--- =========================================================
--- SELESAI
--- =========================================================
-
-
--- =========================================================
--- BOOTSTRAP ADMIN (JALANKAN DENGAN service_role / DB OWNER)
--- Setelah Anda menjalankan perbaikan policy di atas, pengguna biasa tidak bisa lagi
--- menambahkan dirinya sendiri ke public.admin_users. Masukkan admin awal dengan
--- role yang memiliki akses penuh (service key / DB owner), mis.:
---
--- Run as service role / DB owner:
---   INSERT INTO public.admin_users (user_id)
---   VALUES ('00000000-0000-0000-0000-000000000000'::uuid)
---   ON CONFLICT (user_id) DO NOTHING;
---
--- Ganti nilai UUID di atas dengan UUID user yang ingin Anda jadikan admin bootstrap.
--- =========================================================
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tool Kontrol & Monitoring Penjualan</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f8;color:#17202a}
+header{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 50%,#ec4899 100%);color:white;padding:22px;color:white}
+header h1{margin:0;font-size:23px;text-shadow:0 2px 8px #0003}
+nav{display:flex;gap:8px;background:linear-gradient(90deg,#eff6ff,#f5f3ff,#fdf2f8);padding:10px;border-bottom:1px solid #ddd}
+button{border:0;border-radius:8px;padding:10px 14px;cursor:pointer;font-weight:600}
+.primary{background:linear-gradient(135deg,#2563eb,#7c3aed);color:white}
+.primary:hover{filter:brightness(1.08)}
+.success{background:linear-gradient(135deg,#2563eb,#ec4899);color:white}
+.tab{background:#e5e7eb}.tab.active{background:linear-gradient(135deg,#2563eb,#7c3aed,#ec4899);color:white}
+main{max-width:1200px;margin:auto;padding:18px}.card{background:white;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 4px 16px #4f46e51a;border:1px solid #e0e7ff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+input,select{width:100%;padding:11px;border:1px solid #ccd2d8;border-radius:8px;font-size:15px}
+label{font-size:13px;font-weight:bold;display:block;margin-bottom:5px}
+.danger{background:#dc2626;color:white}.muted{color:#667085}
+.stat{font-size:25px;font-weight:700}.hidden{display:none}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #eee;font-size:14px}
+.small{font-size:12px}.msg{padding:10px;border-radius:8px;background:#eef2ff;margin:10px 0}
+.bad{background:#fee2e2;color:#991b1b}.good{background:#dcfce7;color:#166534}
+</style>
+</head>
+<body>
+<header><h1>Tool Kontrol & Monitoring Penjualan</h1></header>
+<nav>
+<button class="tab active" onclick="showTab('kasir',this)">Input Kasir</button>
+<button class="tab" onclick="showTab('mod',this)">Dashboard MOD</button>
+</nav>
+<main>
+<section id="kasir">
+<div class="card">
+<h2>Input Penjualan</h2>
+<div id="kasirMsg"></div>
+<div class="grid">
+<div><label>Nama Kasir</label><input id="cashierName" placeholder="Nama kasir"></div>
+<div><label>Shift</label><select id="shift"><option>Pagi</option><option>Siang</option><option>Malam</option></select></div>
+<div><label>Produk</label><select id="productSelect"></select></div>
+<div><label>Jumlah</label><input id="qty" type="number" min="1" value="1"></div>
+</div>
+<br><button class="primary" onclick="submitSale()">Simpan Penjualan</button>
+</div>
+<div class="card"><h3>Produk Aktif</h3><div id="productList">Memuat...</div></div>
+</section>
+
+<section id="mod" class="hidden">
+<div class="card" id="loginBox">
+<h2>Login MOD</h2>
+<p class="muted">Masukkan password MOD.</p>
+<input id="modPassword" type="password" placeholder="Password MOD">
+<br><br><button class="primary" onclick="loginMod()">Masuk</button>
+<div id="loginMsg"></div>
+</div>
+
+<div id="modPanel" class="hidden">
+<div class="card">
+<h2>Kontrol Target</h2>
+<div class="grid">
+<div><label>Target Pcs</label><input id="targetPcs" type="number" min="0"></div>
+<div><label>Target Omzet</label><input id="targetOmzet" type="number" min="0"></div>
+</div><br><button class="success" onclick="saveSettings()">Simpan Target</button>
+</div>
+
+<div class="card">
+<h2>Kelola Produk</h2>
+<p class="small muted">Perubahan harga berlaku untuk transaksi baru. Harga transaksi lama tidak berubah.</p>
+<div class="grid">
+<div><label>Nama Produk</label><input id="newProductName" placeholder="Nama produk"></div>
+<div><label>Harga</label><input id="newProductPrice" type="number" min="0"></div>
+</div><br>
+<button class="primary" onclick="addProduct()">Tambah Produk</button>
+<hr>
+<div id="modProducts"></div>
+</div>
+
+<div class="card">
+<h2>Ringkasan</h2>
+<div class="grid">
+<div><div class="muted">Total Pcs</div><div class="stat" id="totalPcs">0</div></div>
+<div><div class="muted">Omzet</div><div class="stat" id="totalOmzet">Rp0</div></div>
+<div><div class="muted">Target Pcs</div><div class="stat" id="sumTargetPcs">0</div></div>
+<div><div class="muted">Target Omzet</div><div class="stat" id="sumTargetOmzet">Rp0</div></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Penjualan</h2>
+<div class="grid"><div><label>Filter bulan</label><input id="monthFilter" type="month" onchange="loadSales()"></div><div><label>Filter kasir</label><input id="cashierFilter" placeholder="Nama kasir" oninput="renderSales()"></div></div>
+<br><button class="success" onclick="exportCSV()">Export CSV</button>
+<div id="salesTable" style="overflow:auto;margin-top:12px"></div>
+</div>
+
+<div class="card"><h2>Grafik Produk</h2><canvas id="chart"></canvas></div>
+</div>
+</section>
+</main>
+
+<script>
+/* GANTI 2 NILAI INI DENGAN DATA SUPABASE KAMU */
+const SUPABASE_URL = "MASUKKAN_PROJECT_URL_SUPABASE";
+const SUPABASE_ANON_KEY = "MASUKKAN_ANON_PUBLISHABLE_KEY";
+let modPassword = "";
+
+const sb = supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+let products=[], sales=[], settings={target_pcs:0,target_omzet:0}, mod=false, chart=null;
+
+const rp=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n)||0);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function msg(id,text,good=false){document.getElementById(id).innerHTML=text?`<div class="msg ${good?'good':'bad'}">${esc(text)}</div>`:''}
+function showTab(id,btn){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');if(id==='mod'&&mod)loadMod();}
+async function loadProducts(){
+ const {data,error}=await sb.from('products').select('id,name,price,active').eq('active',true).order('name');
+ if(error){msg('kasirMsg','Gagal membaca produk: '+error.message);return}
+ products=data||[];
+ document.getElementById('productSelect').innerHTML=products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${rp(p.price)}</option>`).join('');
+ document.getElementById('productList').innerHTML=products.length?products.map(p=>`<div style="padding:8px 0;border-bottom:1px solid #eee">${esc(p.name)} — <b>${rp(p.price)}</b></div>`).join(''):'Belum ada produk.';
+}
+async function submitSale(){
+ const name=document.getElementById('cashierName').value.trim(), pid=document.getElementById('productSelect').value, qty=Number(document.getElementById('qty').value);
+ if(!name||!pid||qty<1){msg('kasirMsg','Lengkapi nama kasir, produk, dan jumlah.');return}
+ const p=products.find(x=>x.id===pid); if(!p)return;
+ const payload={cashier_name:name,shift:document.getElementById('shift').value,product_id:p.id,product_name:p.name,unit_price:Number(p.price),qty,total:Number(p.price)*qty};
+ const {error}=await sb.from('sales').insert(payload);
+ if(error){msg('kasirMsg','Gagal menyimpan: '+error.message);return}
+ msg('kasirMsg','Penjualan berhasil disimpan.',true);document.getElementById('qty').value=1;
+}
+async function loginMod(){
+ const pass=document.getElementById('modPassword').value;
+ if(!pass){msg('loginMsg','Masukkan password MOD.');return}
+ const {data,error}=await sb.rpc('verify_mod_password',{p_password:pass});
+ if(error){msg('loginMsg','Login MOD belum aktif. Jalankan SQL keamanan yang saya berikan.');return}
+ if(data!==true){msg('loginMsg','Password MOD salah.');return}
+ modPassword=pass;
+ mod=true;
+ document.getElementById('loginBox').classList.add('hidden');
+ document.getElementById('modPanel').classList.remove('hidden');
+ await loadMod();
+}
+async function loadSettings(){
+ const {data,error}=await sb.rpc('get_mod_dashboard',{p_password:modPassword});
+ if(!error&&data?.settings){
+   settings=data.settings;
+   targetPcs.value=data.settings.target_pcs||0;
+   targetOmzet.value=data.settings.target_omzet||0;
+ }
+}
+async function saveSettings(){
+ const {error}=await sb.rpc('mod_update_settings',{
+   p_password:modPassword,
+   p_target_pcs:Number(targetPcs.value)||0,
+   p_target_omzet:Number(targetOmzet.value)||0
+ });
+ if(error){alert('Gagal menyimpan target: '+error.message);return}
+ await loadMod();
+}
+async function loadMod(){
+ if(!mod)return;
+ const {data,error}=await sb.rpc('get_mod_dashboard',{p_password:modPassword});
+ if(error){alert('Gagal memuat dashboard MOD: '+error.message);return}
+ settings=data?.settings||{target_pcs:0,target_omzet:0};
+ sales=data?.sales||[];
+ products=(data?.products||[]).filter(p=>p.active);
+ targetPcs.value=settings.target_pcs||0;
+ targetOmzet.value=settings.target_omzet||0;
+ renderModProducts(); renderSales(); updateSummary(); renderChart();
+ loadProducts();
+}
+async function addProduct(){
+ const name=newProductName.value.trim(), price=Number(newProductPrice.value);
+ if(!name||price<0){alert('Isi nama dan harga.');return}
+ const {error}=await sb.rpc('mod_save_product',{
+   p_password:modPassword,p_id:null,p_name:name,p_price:price,p_active:true
+ });
+ if(error){alert('Gagal: '+error.message);return}
+ newProductName.value='';newProductPrice.value='';await loadMod();
+}
+function renderModProducts(){
+ modProducts.innerHTML=products.map(p=>`<div class="card" style="box-shadow:none;border:1px solid #eee">
+ <div class="grid"><input id="n_${p.id}" value="${esc(p.name)}"><input id="p_${p.id}" type="number" value="${Number(p.price)}">
+ <button class="success" onclick="updateProduct('${p.id}')">Simpan</button>
+ <button class="danger" onclick="deleteProduct('${p.id}')">Nonaktifkan</button></div></div>`).join('');
+}
+async function updateProduct(id){
+ const name=document.getElementById('n_'+id).value.trim(), price=Number(document.getElementById('p_'+id).value);
+ if(!name||price<0)return alert('Nama/harga tidak valid.');
+ const {error}=await sb.rpc('mod_save_product',{
+   p_password:modPassword,p_id:id,p_name:name,p_price:price,p_active:true
+ });
+ if(error)alert('Gagal: '+error.message);else await loadMod();
+}
+async function deleteProduct(id){
+ if(!confirm('Nonaktifkan produk ini? Transaksi lama tetap tersimpan.'))return;
+ const {error}=await sb.rpc('mod_save_product',{
+   p_password:modPassword,p_id:id,p_name:null,p_price:null,p_active:false
+ });
+ if(error)alert('Gagal: '+error.message);else await loadMod();
+}
+async function loadSales(){
+ if(!mod)return;
+ const {data,error}=await sb.rpc('get_mod_dashboard',{p_password:modPassword});
+ if(error){alert('Gagal membaca penjualan: '+error.message);return}
+ sales=data?.sales||[];
+ renderSales();updateSummary();renderChart();
+}
+function filteredSales(){
+ const m=monthFilter.value,c=(cashierFilter.value||'').toLowerCase();
+ return sales.filter(s=>(!m||String(s.sold_at).slice(0,7)===m)&&(!c||String(s.cashier_name||'').toLowerCase().includes(c)));
+}
+function renderSales(){
+ const arr=filteredSales();
+ salesTable.innerHTML=`<table><thead><tr><th>Waktu</th><th>Kasir</th><th>Shift</th><th>Produk</th><th>Harga</th><th>Qty</th><th>Total</th><th>Aksi</th></tr></thead><tbody>${arr.map(s=>`<tr><td>${new Date(s.sold_at).toLocaleString('id-ID')}</td><td>${esc(s.cashier_name)}</td><td>${esc(s.shift)}</td><td>${esc(s.product_name)}</td><td>${rp(s.unit_price)}</td><td>${s.qty}</td><td>${rp(s.total)}</td><td><button class="danger" onclick="deleteSale('${s.id}')">Hapus</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function deleteSale(id){
+ if(!confirm('Hapus transaksi ini karena tidak valid?'))return;
+ const {error}=await sb.rpc('mod_delete_sale',{p_password:modPassword,p_sale_id:id});
+ if(error){alert('Gagal menghapus: '+error.message);return}
+ await loadMod();
+}
+function updateSummary(){
+ const arr=filteredSales(), pcs=arr.reduce((a,s)=>a+Number(s.qty),0), omzet=arr.reduce((a,s)=>a+Number(s.total),0);
+ totalPcs.textContent=pcs;totalOmzet.textContent=rp(omzet);sumTargetPcs.textContent=settings.target_pcs||0;sumTargetOmzet.textContent=rp(settings.target_omzet);
+}
+function renderChart(){
+ const sums={};filteredSales().forEach(s=>sums[s.product_name]=(sums[s.product_name]||0)+Number(s.qty));
+ if(chart)chart.destroy();chart=new Chart(document.getElementById('chart'),{type:'bar',data:{labels:Object.keys(sums),datasets:[{label:'Pcs terjual',data:Object.values(sums)}]},options:{responsive:true}});
+}
+function exportCSV(){
+ const arr=filteredSales(), rows=[['Waktu','Kasir','Shift','Produk','Harga Satuan','Qty','Total'],...arr.map(s=>[s.sold_at,s.cashier_name,s.shift,s.product_name,s.unit_price,s.qty,s.total])];
+ const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='penjualan.csv';a.click();
+}
+sb.channel('sales-live').on('postgres_changes',{event:'*',schema:'public',table:'sales'},()=>{if(mod)loadMod()}).subscribe();
+loadProducts();
+</script>
+</body>
+</html>
