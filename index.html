@@ -1,412 +1,435 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Kontrol Penjualan Toko</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body class="bg-gray-100 font-sans p-4 md:p-6">
+-- =========================================================
+-- DATABASE ONLINE TOOL KONTROL PENJUALAN
+-- VERSI PERBAIKAN (policy admin_users & casting auth.uid()::uuid)
+-- =========================================================
 
-  <div class="max-w-6xl mx-auto space-y-6">
-    <!-- Header -->
-    <div class="bg-blue-800 text-white p-5 rounded-lg shadow-md flex justify-between items-center">
-      <div>
-        <h1 class="text-2xl font-bold">📊 Tool Kontrol & Monitoring Penjualan</h1>
-        <p class="text-blue-200 text-sm">Alat Ukur Target Harian Toko & Laporan Kasir</p>
-      </div>
-      <div id="statusModLogin" class="hidden text-right">
-        <span class="bg-green-500 text-white text-xs px-2 py-1 rounded font-bold">MOD Terverifikasi</span>
-        <button onclick="logoutMOD()" class="block text-xs text-blue-200 underline mt-1">Keluar / Lock</button>
-      </div>
-    </div>
+create extension if not exists pgcrypto;
 
-    <!-- Navigasi Tab -->
-    <div class="flex border-b border-gray-300">
-      <button onclick="switchTab('kasir')" id="tab-kasir" class="py-2 px-6 font-bold text-blue-700 border-b-2 border-blue-700 focus:outline-none">📝 Input Kasir</button>
-      <button onclick="switchTab('mod')" id="tab-mod" class="py-2 px-6 font-bold text-gray-500 hover:text-blue-700 focus:outline-none">🔒 Dashboard MOD (Pengontrol Target)</button>
-    </div>
 
-    <!-- TAB 1: FORM INPUT KASIR -->
-    <div id="sec-kasir" class="bg-white p-6 rounded-lg shadow-md">
-      <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Form Laporan Kasir Harian</h2>
-      <form id="formPenjualan" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Kasir</label>
-          <input type="text" id="kasirNama" required placeholder="Masukkan nama kasir" class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500">
-        </div>
+-- =========================================================
+-- 1. TABEL PRODUCTS
+-- =========================================================
 
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-1">Shift</label>
-          <select id="kasirShift" class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500">
-            <option value="Shift 1 (Pagi)">Shift 1 (Pagi)</option>
-            <option value="Shift 2 (Malam)">Shift 2 (Malam)</option>
-          </select>
-        </div>
+create table if not exists public.products (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  price numeric(14,2) not null default 0 check (price >= 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
 
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-1">Produk Terjual (SKU & Harga Satuan)</label>
-          <select id="kasirProduk" class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 font-semibold bg-gray-50">
-          </select>
-        </div>
+-- Index nama produk (menggunakan lower(name) agar case-insensitive)
+create unique index if not exists products_name_unique
+on public.products (lower(name));
 
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-1">Jumlah Terjual (Pcs)</label>
-          <input type="number" id="kasirQty" min="1" required placeholder="Contoh: 15" class="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500">
-        </div>
 
-        <div class="md:col-span-2 mt-2">
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow">🚀 Kirim Laporan</button>
-        </div>
-      </form>
-    </div>
+-- =========================================================
+-- 2. TABEL SETTINGS
+-- =========================================================
 
-    <!-- TAB 2: POPUP LOGIN MOD -->
-    <div id="sec-mod-login" class="hidden bg-white p-8 rounded-lg shadow-md max-w-md mx-auto text-center space-y-4 border-t-4 border-amber-500">
-      <div class="text-4xl">🔐</div>
-      <h2 class="text-xl font-bold text-gray-800">Akses Khusus MOD</h2>
-      <p class="text-sm text-gray-500">Masukkan Kata Sandi MOD untuk membuka dashboard pengontrol.</p>
-      
-      <div class="text-left space-y-3">
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">Kode / Password MOD</label>
-          <input type="password" id="modPass" placeholder="Masukkan password" class="w-full border p-2 rounded focus:ring-2 focus:ring-amber-500">
-        </div>
-      </div>
+create table if not exists public.settings (
+  id integer primary key default 1,
+  target_pcs integer not null default 0 check (target_pcs >= 0),
+  target_omzet numeric(14,2) not null default 0 check (target_omzet >= 0),
+  updated_at timestamptz not null default now()
+);
 
-      <button onclick="loginMOD()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded shadow">Masuk Dashboard MOD</button>
-      <p id="loginError" class="text-xs text-red-600 font-bold hidden">Password Salah!</p>
-    </div>
+-- Pastikan baris settings tersedia
+insert into public.settings
+  (id, target_pcs, target_omzet)
+select
+  1, 0, 0
+where not exists (
+  select 1
+  from public.settings
+  where id = 1
+);
 
-    <!-- TAB 3: DASHBOARD KONTROL MOD -->
-    <div id="sec-mod-content" class="hidden space-y-6">
-      
-      <!-- Pengaturan Nama Produk, SKU & Harga oleh MOD -->
-      <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-amber-500 space-y-4">
-        <h2 class="text-lg font-bold text-gray-800 border-b pb-2">🎯 Pengaturan Target & Catalog Produk/Harga (MOD)</h2>
-        
-        <!-- Input Ubah Nama Produk dan Harga -->
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">Daftar Produk & Harga Satuan SKU (Format: Nama Produk : Harga, Dipisahkan koma):</label>
-          <input type="text" id="inputDaftarProduk" value="Produk Fokus A:25000, Produk Fokus B:15000, Kopi Susu:18000, Roti Bakar:12000, Lainnya:10000" class="w-full border p-2 rounded text-sm bg-amber-50 focus:bg-white border-amber-300" onchange="simpanDaftarProduk()">
-          <span class="text-xs text-gray-500 italic">*Format penulisan: <b>Nama Produk:Harga</b>. Contoh: <i>Lipstik:35000, Serum:50000</i></span>
-        </div>
 
-        <!-- Target Harian -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          <div>
-            <label class="block text-xs font-semibold text-gray-600">Target Total Produk Fokus (Pcs)</label>
-            <input type="number" id="targetPcs" value="100" class="w-full border p-2 rounded font-bold text-gray-800" onchange="updateDashboard()">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600">Target Omzet Toko (Rp)</label>
-            <input type="number" id="targetOmzet" value="2000000" class="w-full border p-2 rounded font-bold text-gray-800" onchange="updateDashboard()">
-          </div>
-        </div>
-      </div>
+-- =========================================================
+-- 3. TABEL ADMIN USERS
+-- =========================================================
 
-      <!-- FILTER HISTORI & ARSIP BULANAN -->
-      <div class="bg-amber-50 border border-amber-200 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">📅</span>
-          <div>
-            <h3 class="font-bold text-gray-800 text-sm">Filter Histori & Arsip Penjualan</h3>
-            <p class="text-xs text-gray-600">Pilih bulan dan tahun untuk melihat arsip laporan bulanan.</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2 w-full md:w-auto">
-          <label class="text-xs font-semibold text-gray-700 whitespace-nowrap">Bulan Laporan:</label>
-          <input type="month" id="filterBulan" class="border p-2 rounded font-bold text-gray-800 text-sm bg-white focus:ring-2 focus:ring-amber-500" onchange="updateDashboard()">
-        </div>
-      </div>
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
 
-      <!-- Ringkasan Capaian Target (KPI) MOD -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Progress Produk -->
-        <div class="bg-white p-5 rounded-lg shadow-md">
-          <div class="flex justify-between items-center mb-2">
-            <span class="font-bold text-gray-700">Penjualan Produk Fokus</span>
-            <span id="txtStatPcs" class="text-sm font-bold text-blue-600">0 / 100 Pcs</span>
-          </div>
-          <div class="w-full bg-gray-200 rounded-full h-4">
-            <div id="barPcs" class="bg-blue-600 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
-          </div>
-          <p id="pctPcs" class="text-right text-xs font-bold mt-1 text-gray-500">0% Terpadu</p>
-        </div>
 
-        <!-- Progress Omzet -->
-        <div class="bg-white p-5 rounded-lg shadow-md">
-          <div class="flex justify-between items-center mb-2">
-            <span class="font-bold text-gray-700">Estimasi Total Omzet Toko</span>
-            <span id="txtStatOmzet" class="text-sm font-bold text-green-600">Rp 0 / Rp 2.000.000</span>
-          </div>
-          <div class="w-full bg-gray-200 rounded-full h-4">
-            <div id="barOmzet" class="bg-green-600 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
-          </div>
-          <p id="pctOmzet" class="text-right text-xs font-bold mt-1 text-gray-500">0% Terpadu</p>
-        </div>
-      </div>
+-- =========================================================
+-- 4. TABEL SALES
+-- =========================================================
 
-      <!-- Visualisasi Grafik MOD -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-white p-5 rounded-lg shadow-md">
-          <h3 class="font-bold text-gray-700 mb-4 text-center">Penjualan per Produk (Pcs)</h3>
-          <canvas id="chartProduk"></canvas>
-        </div>
-        <div class="bg-white p-5 rounded-lg shadow-md">
-          <h3 class="font-bold text-gray-700 mb-4 text-center">Performa Kasir (Pcs)</h3>
-          <canvas id="chartKasir"></canvas>
-        </div>
-      </div>
+create table if not exists public.sales (
+  id uuid primary key default gen_random_uuid(),
 
-      <!-- Tabel Detail Laporan Kasir -->
-      <div class="bg-white p-5 rounded-lg shadow-md">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-bold text-gray-800">📋 Arsip & Detail Laporan Masuk</h3>
-          <span id="labelPeriodeAktif" class="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">Bulan: -</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-gray-100 border-b text-gray-700 text-sm">
-                <th class="p-3">Tanggal & Waktu</th>
-                <th class="p-3">Kasir</th>
-                <th class="p-3">Shift</th>
-                <th class="p-3">Produk</th>
-                <th class="p-3 text-right">Harga Satuan</th>
-                <th class="p-3 text-right">Qty (Pcs)</th>
-                <th class="p-3 text-right">Total Omzet</th>
-              </tr>
-            </thead>
-            <tbody id="tabelLaporan" class="text-sm divide-y">
-              <tr>
-                <td colspan="7" class="p-4 text-center text-gray-400">Belum ada laporan masuk.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+  cashier_user_id uuid references auth.users(id) on delete set null,
+  cashier_name text,
 
-    </div>
-  </div>
+  shift text,
 
-  <!-- Script Logika Sistem -->
-  <script>
-    const MOD_PASSWORD = "BEAUTY BISA";
+  product_id uuid references public.products(id) on delete set null,
 
-    let isModLoggedIn = false;
-    let dbData = [];
-    let catalogProduk = {};
-    let myChartProduk = null;
-    let myChartKasir = null;
+  product_name text not null,
 
-    window.onload = function() {
-      // Set default filter bulan ke Bulan & Tahun Saat Ini (YYYY-MM)
-      const hariIni = new Date();
-      const formatBulan = hariIni.toISOString().slice(0, 7);
-      document.getElementById('filterBulan').value = formatBulan;
+  unit_price numeric(14,2) not null default 0
+    check (unit_price >= 0),
 
-      // Muat Data Arsip dari LocalStorage
-      muatDataArsip();
-      simpanDaftarProduk();
-    };
+  qty integer not null default 1
+    check (qty > 0),
 
-    function loginMOD() {
-      const passInput = document.getElementById('modPass').value.trim();
-      const errEl = document.getElementById('loginError');
+  total numeric(14,2) not null default 0
+    check (total >= 0),
 
-      if (passInput.toUpperCase() === MOD_PASSWORD.toUpperCase()) {
-        isModLoggedIn = true;
-        errEl.classList.add('hidden');
-        document.getElementById('sec-mod-login').classList.add('hidden');
-        document.getElementById('sec-mod-content').classList.remove('hidden');
-        document.getElementById('statusModLogin').classList.remove('hidden');
-        updateDashboard();
-      } else {
-        errEl.classList.remove('hidden');
-      }
-    }
+  sold_at timestamptz not null default now()
+);
 
-    function logoutMOD() {
-      isModLoggedIn = false;
-      document.getElementById('modPass').value = '';
-      document.getElementById('statusModLogin').classList.add('hidden');
-      switchTab('kasir');
-    }
 
-    function switchTab(tab) {
-      if(tab === 'kasir') {
-        document.getElementById('sec-kasir').classList.remove('hidden');
-        document.getElementById('sec-mod-login').classList.add('hidden');
-        document.getElementById('sec-mod-content').classList.add('hidden');
-        document.getElementById('tab-kasir').className = "py-2 px-6 font-bold text-blue-700 border-b-2 border-blue-700 focus:outline-none";
-        document.getElementById('tab-mod').className = "py-2 px-6 font-bold text-gray-500 hover:text-blue-700 focus:outline-none";
-      } else {
-        document.getElementById('sec-kasir').classList.add('hidden');
-        document.getElementById('tab-mod').className = "py-2 px-6 font-bold text-blue-700 border-b-2 border-blue-700 focus:outline-none";
-        document.getElementById('tab-kasir').className = "py-2 px-6 font-bold text-gray-500 hover:text-blue-700 focus:outline-none";
+-- =========================================================
+-- 5. INDEX PENJUALAN
+-- =========================================================
 
-        if (isModLoggedIn) {
-          document.getElementById('sec-mod-content').classList.remove('hidden');
-          document.getElementById('sec-mod-login').classList.add('hidden');
-          updateDashboard();
-        } else {
-          document.getElementById('sec-mod-login').classList.remove('hidden');
-          document.getElementById('sec-mod-content').classList.add('hidden');
-        }
-      }
-    }
+create index if not exists sales_sold_at_idx
+on public.sales (sold_at);
 
-    function simpanDaftarProduk() {
-      const inputStr = document.getElementById('inputDaftarProduk').value;
-      const items = inputStr.split(',').map(item => item.trim()).filter(item => item !== '');
-      
-      catalogProduk = {};
-      const selectKasir = document.getElementById('kasirProduk');
-      selectKasir.innerHTML = '';
+create index if not exists sales_cashier_name_idx
+on public.sales (cashier_name);
 
-      items.forEach(item => {
-        const parts = item.split(':');
-        const nama = parts[0] ? parts[0].trim() : 'Produk';
-        const harga = parts[1] ? parseInt(parts[1].trim()) || 0 : 0;
+create index if not exists sales_product_id_idx
+on public.sales (product_id);
 
-        catalogProduk[nama] = harga;
 
-        const option = document.createElement('option');
-        option.value = nama;
-        option.innerText = `${nama} (Rp ${harga.toLocaleString()})`;
-        selectKasir.appendChild(option);
-      });
-    }
+-- =========================================================
+-- 6. FUNCTION OTOMATIS HARGA PENJUALAN
+-- =========================================================
 
-    // Fungsi Menyimpan Laporan Kasir & Menyimpannya Secara Permanen di Arsip (LocalStorage)
-    document.getElementById('formPenjualan').addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      const prodSelected = document.getElementById('kasirProduk').value;
-      const hargaSatuan = catalogProduk[prodSelected] || 0;
-      const qty = parseInt(document.getElementById('kasirQty').value);
-      
-      const skr = new Date();
-      const tglString = skr.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const jamString = skr.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-      const bulanKey = skr.toISOString().slice(0, 7); // Format: YYYY-MM
+create or replace function public.validate_sale()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  p_name text;
+  p_price numeric(14,2);
+begin
 
-      const item = {
-        bulanKey: bulanKey,
-        waktu: `${tglString} ${jamString}`,
-        kasir: document.getElementById('kasirNama').value,
-        shift: document.getElementById('kasirShift').value,
-        produk: prodSelected,
-        hargaSatuan: hargaSatuan,
-        qty: qty,
-        totalOmzet: qty * hargaSatuan
-      };
+  -- Jika product_id digunakan
+  if new.product_id is not null then
 
-      dbData.push(item);
-      simpanKeLocalStorage();
-      alert('✅ Laporan berhasil disimpan ke arsip!');
-      this.reset();
-    });
+    select
+      name,
+      price
+    into
+      p_name,
+      p_price
+    from public.products
+    where id = new.product_id
+      and active = true;
 
-    function simpanKeLocalStorage() {
-      localStorage.setItem('arsipPenjualanToko', JSON.stringify(dbData));
-    }
+    -- Produk harus aktif
+    if p_name is null then
+      raise exception 'Produk tidak ditemukan atau sudah tidak aktif';
+    end if;
 
-    function muatDataArsip() {
-      const tersimpan = localStorage.getItem('arsipPenjualanToko');
-      if (tersimpan) {
-        dbData = JSON.parse(tersimpan);
-      }
-    }
+    -- Ambil harga terbaru dari database
+    new.product_name := p_name;
+    new.unit_price := p_price;
 
-    // Update Dashboard dengan Filter Bulanan untuk Histori/Arsip
-    function updateDashboard() {
-      if (!isModLoggedIn) return;
+  end if;
 
-      const targetPcs = parseInt(document.getElementById('targetPcs').value) || 1;
-      const targetOmzet = parseInt(document.getElementById('targetOmzet').value) || 1;
-      const bulanFilter = document.getElementById('filterBulan').value;
+  -- Hitung total otomatis
+  new.total := round(new.unit_price * new.qty, 2);
 
-      document.getElementById('labelPeriodeAktif').innerText = `Bulan Arsip: ${bulanFilter}`;
+  return new;
+end;
+$$;
 
-      let totalPcs = 0;
-      let totalOmzet = 0;
-      let rekapProduk = {};
-      let rekapKasir = {};
 
-      const tbody = document.getElementById('tabelLaporan');
-      tbody.innerHTML = '';
+-- NOTE: Fungsi ini dibuat SECURITY DEFINER. Pastikan owner fungsi adalah role yang benar
+-- (service account / db owner) dan bukan role dengan privilege terbatas. Sesuaikan owner
+-- jika perlu, mis.:
+--   alter function public.validate_sale() owner to postgres; -- sesuaikan role target
 
-      // Filter Data Berdasarkan Bulan yang Dipilih oleh MOD
-      const dataTerfilter = dbData.filter(row => row.bulanKey === bulanFilter);
 
-      if (dataTerfilter.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada arsip laporan untuk periode ${bulanFilter}.</td></tr>`;
-      } else {
-        dataTerfilter.forEach(row => {
-          totalPcs += row.qty;
-          totalOmzet += row.totalOmzet;
+-- =========================================================
+-- 7. TRIGGER PENJUALAN
+-- =========================================================
 
-          rekapProduk[row.produk] = (rekapProduk[row.produk] || 0) + row.qty;
-          rekapKasir[row.kasir] = (rekapKasir[row.kasir] || 0) + row.qty;
+drop trigger if exists sales_validate_before_insert
+on public.sales;
 
-          tbody.innerHTML += `
-            <tr class="hover:bg-gray-50">
-              <td class="p-3 font-semibold text-gray-600">${row.waktu}</td>
-              <td class="p-3 font-semibold">${row.kasir}</td>
-              <td class="p-3">${row.shift}</td>
-              <td class="p-3">${row.produk}</td>
-              <td class="p-3 text-right">Rp ${row.hargaSatuan.toLocaleString()}</td>
-              <td class="p-3 text-right font-bold text-blue-600">${row.qty} Pcs</td>
-              <td class="p-3 text-right font-bold text-green-600">Rp ${row.totalOmzet.toLocaleString()}</td>
-            </tr>
-          `;
-        });
-      }
+create trigger sales_validate_before_insert
+before insert on public.sales
+for each row
+execute function public.validate_sale();
 
-      const pctPcs = Math.min(100, Math.round((totalPcs / targetPcs) * 100));
-      const pctOmzet = Math.min(100, Math.round((totalOmzet / targetOmzet) * 100));
 
-      document.getElementById('txtStatPcs').innerText = `${totalPcs} / ${targetPcs} Pcs`;
-      document.getElementById('barPcs').style.width = `${pctPcs}%`;
-      document.getElementById('pctPcs').innerText = `${pctPcs}% Tercapai`;
+-- =========================================================
+-- 8. AKTIFKAN RLS
+-- =========================================================
 
-      document.getElementById('txtStatOmzet').innerText = `Rp ${totalOmzet.toLocaleString()} / Rp ${targetOmzet.toLocaleString()}`;
-      document.getElementById('barOmzet').style.width = `${pctOmzet}%`;
-      document.getElementById('pctOmzet').innerText = `${pctOmzet}% Tercapai`;
+alter table public.products enable row level security;
+alter table public.settings enable row level security;
+alter table public.admin_users enable row level security;
+alter table public.sales enable row level security;
 
-      renderCharts(rekapProduk, rekapKasir);
-    }
 
-    function renderCharts(produkData, kasirData) {
-      const ctx1 = document.getElementById('chartProduk').getContext('2d');
-      if(myChartProduk) myChartProduk.destroy();
-      myChartProduk = new Chart(ctx1, {
-        type: 'doughnut',
-        data: {
-          labels: Object.keys(produkData).length > 0 ? Object.keys(produkData) : ['Belum Ada Data'],
-          datasets: [{ 
-            data: Object.values(produkData).length > 0 ? Object.values(produkData) : [1], 
-            backgroundColor: Object.values(produkData).length > 0 ? ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'] : ['#E5E7EB'] 
-          }]
-        }
-      });
+-- =========================================================
+-- 9. HAPUS POLICY LAMA
+-- =========================================================
 
-      const ctx2 = document.getElementById('chartKasir').getContext('2d');
-      if(myChartKasir) myChartKasir.destroy();
-      myChartKasir = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-          labels: Object.keys(kasirData),
-          datasets: [{ label: 'Pcs Terjual', data: Object.values(kasirData), backgroundColor: '#3B82F6' }]
-        },
-        options: { scales: { y: { beginAtZero: true } } }
-      });
-    }
-  </script>
-</body>
-</html>
+drop policy if exists "Public can view active products"
+on public.products;
+
+drop policy if exists "Admins can manage products"
+on public.products;
+
+drop policy if exists "Admins can manage settings"
+on public.settings;
+
+drop policy if exists "Admins can manage admin users"
+on public.admin_users;
+
+drop policy if exists "Anyone can insert sales"
+on public.sales;
+
+drop policy if exists "Admins can read sales"
+on public.sales;
+
+drop policy if exists "Admins can delete sales"
+on public.sales;
+
+
+-- =========================================================
+-- 10. POLICY PRODUCTS
+-- =========================================================
+
+create policy "Public can view active products"
+on public.products
+for select
+to anon, authenticated
+using (active = true);
+
+
+create policy "Admins can manage products"
+on public.products
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+);
+
+
+-- =========================================================
+-- 11. POLICY SETTINGS
+-- =========================================================
+
+create policy "Admins can manage settings"
+on public.settings
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+);
+
+
+-- =========================================================
+-- 12. POLICY ADMIN USERS
+-- =========================================================
+-- PENTING: kebijakan ini TIDAK mengizinkan self-insert. Hanya user yang sudah menjadi admin
+-- (ada di public.admin_users) yang dapat mengelola admin_users.
+
+create policy "Admins can manage admin users"
+on public.admin_users
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+);
+
+
+-- =========================================================
+-- 13. POLICY SALES
+-- =========================================================
+
+create policy "Anyone can insert sales"
+on public.sales
+for insert
+to anon, authenticated
+with check (true);
+
+
+create policy "Admins can read sales"
+on public.sales
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+);
+
+
+create policy "Admins can delete sales"
+on public.sales
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.admin_users
+    where user_id = auth.uid()::uuid
+  )
+);
+
+
+-- =========================================================
+-- 14. IZIN AKSES
+-- =========================================================
+
+grant usage on schema public to anon, authenticated;
+
+grant select on public.products
+to anon, authenticated;
+
+grant insert on public.sales
+to anon, authenticated;
+
+grant select, insert, update, delete
+on public.sales
+to authenticated;
+
+grant select, insert, update
+on public.settings
+to authenticated;
+
+grant select, insert, update, delete
+on public.products
+to authenticated;
+
+grant select, insert, update, delete
+on public.admin_users
+to authenticated;
+
+
+-- =========================================================
+-- 15. PRODUK AWAL
+-- TIDAK MENGGUNAKAN ON CONFLICT (karena index expression lower(name))
+-- =========================================================
+
+insert into public.products (name, price, active)
+select 'GB BEAUTY', 2900, true
+where not exists (
+  select 1
+  from public.products
+  where lower(name) = lower('GB BEAUTY')
+);
+
+insert into public.products (name, price, active)
+select 'INDOMIE BANDIT', 15000, true
+where not exists (
+  select 1
+  from public.products
+  where lower(name) = lower('INDOMIE BANDIT')
+);
+
+insert into public.products (name, price, active)
+select 'Produk A', 50000, true
+where not exists (
+  select 1
+  from public.products
+  where lower(name) = lower('Produk A')
+);
+
+insert into public.products (name, price, active)
+select 'Produk B', 75000, true
+where not exists (
+  select 1
+  from public.products
+  where lower(name) = lower('Produk B')
+);
+
+
+-- =========================================================
+-- 16. REALTIME UNTUK LAPORAN PENJUALAN
+-- =========================================================
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) then
+
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'sales'
+    ) then
+
+      alter publication supabase_realtime
+      add table public.sales;
+
+    end if;
+
+  end if;
+end $$;
+
+
+-- =========================================================
+-- SELESAI
+-- =========================================================
+
+
+-- =========================================================
+-- BOOTSTRAP ADMIN (JALANKAN DENGAN service_role / DB OWNER)
+-- Setelah Anda menjalankan perbaikan policy di atas, pengguna biasa tidak bisa lagi
+-- menambahkan dirinya sendiri ke public.admin_users. Masukkan admin awal dengan
+-- role yang memiliki akses penuh (service key / DB owner), mis.:
+--
+-- Run as service role / DB owner:
+--   INSERT INTO public.admin_users (user_id)
+--   VALUES ('00000000-0000-0000-0000-000000000000'::uuid)
+--   ON CONFLICT (user_id) DO NOTHING;
+--
+-- Ganti nilai UUID di atas dengan UUID user yang ingin Anda jadikan admin bootstrap.
+-- =========================================================
