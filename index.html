@@ -1,242 +1,507 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tool Kontrol & Monitoring Penjualan</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f8;color:#17202a}
-header{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 50%,#ec4899 100%);color:white;padding:22px;color:white}
-header h1{margin:0;font-size:23px;text-shadow:0 2px 8px #0003}
-nav{display:flex;gap:8px;background:linear-gradient(90deg,#eff6ff,#f5f3ff,#fdf2f8);padding:10px;border-bottom:1px solid #ddd}
-button{border:0;border-radius:8px;padding:10px 14px;cursor:pointer;font-weight:600}
-.primary{background:linear-gradient(135deg,#2563eb,#7c3aed);color:white}
-.primary:hover{filter:brightness(1.08)}
-.success{background:linear-gradient(135deg,#2563eb,#ec4899);color:white}
-.tab{background:#e5e7eb}.tab.active{background:linear-gradient(135deg,#2563eb,#7c3aed,#ec4899);color:white}
-main{max-width:1200px;margin:auto;padding:18px}.card{background:white;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 4px 16px #4f46e51a;border:1px solid #e0e7ff}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-input,select{width:100%;padding:11px;border:1px solid #ccd2d8;border-radius:8px;font-size:15px}
-label{font-size:13px;font-weight:bold;display:block;margin-bottom:5px}
-.danger{background:#dc2626;color:white}.muted{color:#667085}
-.stat{font-size:25px;font-weight:700}.hidden{display:none}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #eee;font-size:14px}
-.small{font-size:12px}.msg{padding:10px;border-radius:8px;background:#eef2ff;margin:10px 0}
-.bad{background:#fee2e2;color:#991b1b}.good{background:#dcfce7;color:#166534}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Kontrol Penjualan Toko (Supabase)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
-<header><h1>Tool Kontrol & Monitoring Penjualan</h1></header>
-<nav>
-<button class="tab active" onclick="showTab('kasir',this)">Input Kasir</button>
-<button class="tab" onclick="showTab('mod',this)">Dashboard MOD</button>
-</nav>
-<main>
-<section id="kasir">
-<div class="card">
-<h2>Input Penjualan</h2>
-<div id="kasirMsg"></div>
-<div class="grid">
-<div><label>Nama Kasir</label><input id="cashierName" placeholder="Nama kasir"></div>
-<div><label>Shift</label><select id="shift"><option>Pagi</option><option>Siang</option><option>Malam</option></select></div>
-<div><label>Produk</label><select id="productSelect"></select></div>
-<div><label>Jumlah</label><input id="qty" type="number" min="1" value="1"></div>
-</div>
-<br><button class="primary" onclick="submitSale()">Simpan Penjualan</button>
-</div>
-<div class="card"><h3>Produk Aktif</h3><div id="productList">Memuat...</div></div>
-</section>
+<body class="bg-pink-50 font-sans p-4 md:p-6">
 
-<section id="mod" class="hidden">
-<div class="card" id="loginBox">
-<h2>Login MOD</h2>
-<p class="muted">Masukkan password MOD.</p>
-<input id="modPassword" type="password" placeholder="Password MOD">
-<br><br><button class="primary" onclick="loginMod()">Masuk</button>
-<div id="loginMsg"></div>
-</div>
+  <div class="max-w-6xl mx-auto space-y-6">
+    <!-- Header Pink -->
+    <div class="bg-pink-600 text-white p-5 rounded-lg shadow-md flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">📊 Tool Kontrol &amp; Monitoring Penjualan</h1>
+        <p class="text-pink-100 text-sm">Alat Ukur Target Harian Toko &amp; Laporan Kasir (Supabase Cloud)</p>
+      </div>
+      <div id="statusModLogin" class="hidden text-right">
+        <span class="bg-rose-500 text-white text-xs px-2 py-1 rounded font-bold">MOD Terverifikasi</span>
+        <button onclick="logoutMOD()" class="block text-xs text-pink-200 underline mt-1 hover:text-white">Keluar / Lock</button>
+      </div>
+    </div>
 
-<div id="modPanel" class="hidden">
-<div class="card">
-<h2>Kontrol Target</h2>
-<div class="grid">
-<div><label>Target Pcs</label><input id="targetPcs" type="number" min="0"></div>
-<div><label>Target Omzet</label><input id="targetOmzet" type="number" min="0"></div>
-</div><br><button class="success" onclick="saveSettings()">Simpan Target</button>
-</div>
+    <!-- Navigasi Tab -->
+    <div class="flex border-b border-pink-200">
+      <button onclick="switchTab('kasir')" id="tab-kasir" class="py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none">📝 Input Kasir</button>
+      <button onclick="switchTab('mod')" id="tab-mod" class="py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none">🔒 Dashboard MOD (Pengontrol Target)</button>
+    </div>
 
-<div class="card">
-<h2>Kelola Produk</h2>
-<p class="small muted">Perubahan harga berlaku untuk transaksi baru. Harga transaksi lama tidak berubah.</p>
-<div class="grid">
-<div><label>Nama Produk</label><input id="newProductName" placeholder="Nama produk"></div>
-<div><label>Harga</label><input id="newProductPrice" type="number" min="0"></div>
-</div><br>
-<button class="primary" onclick="addProduct()">Tambah Produk</button>
-<hr>
-<div id="modProducts"></div>
-</div>
+    <!-- TAB 1: FORM INPUT KASIR -->
+    <div id="sec-kasir" class="bg-white p-6 rounded-lg shadow-md border-t-4 border-pink-500">
+      <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Form Laporan Kasir Harian</h2>
+      <form id="formPenjualan" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Kasir</label>
+          <input type="text" id="kasirNama" required placeholder="Masukkan nama kasir" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
+        </div>
 
-<div class="card">
-<h2>Ringkasan</h2>
-<div class="grid">
-<div><div class="muted">Total Pcs</div><div class="stat" id="totalPcs">0</div></div>
-<div><div class="muted">Omzet</div><div class="stat" id="totalOmzet">Rp0</div></div>
-<div><div class="muted">Target Pcs</div><div class="stat" id="sumTargetPcs">0</div></div>
-<div><div class="muted">Target Omzet</div><div class="stat" id="sumTargetOmzet">Rp0</div></div>
-</div>
-</div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Shift</label>
+          <select id="kasirShift" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
+            <option value="Shift 1 (Pagi)">Shift 1 (Pagi)</option>
+            <option value="Shift 2 (Malam)">Shift 2 (Malam)</option>
+          </select>
+        </div>
 
-<div class="card">
-<h2>Penjualan</h2>
-<div class="grid"><div><label>Filter bulan</label><input id="monthFilter" type="month" onchange="loadSales()"></div><div><label>Filter kasir</label><input id="cashierFilter" placeholder="Nama kasir" oninput="renderSales()"></div></div>
-<br><button class="success" onclick="exportCSV()">Export CSV</button>
-<div id="salesTable" style="overflow:auto;margin-top:12px"></div>
-</div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Produk Terjual (SKU &amp; Harga Satuan)</label>
+          <select id="kasirProduk" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 font-semibold bg-pink-50/50 outline-none">
+            <!-- Pilihan produk diisi otomatis -->
+          </select>
+        </div>
 
-<div class="card"><h2>Grafik Produk</h2><canvas id="chart"></canvas></div>
-</div>
-</section>
-</main>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Jumlah Terjual (Pcs)</label>
+          <input type="number" id="kasirQty" min="1" required placeholder="Contoh: 15" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
+        </div>
 
-<script>
-/* GANTI 2 NILAI INI DENGAN DATA SUPABASE KAMU */
-const SUPABASE_URL = "MASUKKAN_PROJECT_URL_SUPABASE";
-const SUPABASE_ANON_KEY = "MASUKKAN_ANON_PUBLISHABLE_KEY";
-let modPassword = "";
+        <div class="md:col-span-2 mt-2">
+          <button type="submit" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 rounded-lg shadow transition duration-200">🚀 Kirim Laporan</button>
+        </div>
+      </form>
+    </div>
 
-const sb = supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-let products=[], sales=[], settings={target_pcs:0,target_omzet:0}, mod=false, chart=null;
+    <!-- TAB 2: POPUP LOGIN MOD -->
+    <div id="sec-mod-login" class="hidden bg-white p-8 rounded-lg shadow-md max-w-md mx-auto text-center space-y-4 border-t-4 border-rose-500">
+      <div class="text-4xl">🔐</div>
+      <h2 class="text-xl font-bold text-gray-800">Akses Khusus MOD</h2>
+      <p class="text-sm text-gray-500">Masukkan Kata Sandi MOD untuk membuka dashboard pengontrol.</p>
+      
+      <div class="text-left space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Kode / Password MOD</label>
+          <input type="password" id="modPass" placeholder="Masukkan password" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-rose-400 outline-none">
+        </div>
+      </div>
 
-const rp=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n)||0);
-const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-function msg(id,text,good=false){document.getElementById(id).innerHTML=text?`<div class="msg ${good?'good':'bad'}">${esc(text)}</div>`:''}
-function showTab(id,btn){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');if(id==='mod'&&mod)loadMod();}
-async function loadProducts(){
- const {data,error}=await sb.from('products').select('id,name,price,active').eq('active',true).order('name');
- if(error){msg('kasirMsg','Gagal membaca produk: '+error.message);return}
- products=data||[];
- document.getElementById('productSelect').innerHTML=products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${rp(p.price)}</option>`).join('');
- document.getElementById('productList').innerHTML=products.length?products.map(p=>`<div style="padding:8px 0;border-bottom:1px solid #eee">${esc(p.name)} — <b>${rp(p.price)}</b></div>`).join(''):'Belum ada produk.';
-}
-async function submitSale(){
- const name=document.getElementById('cashierName').value.trim(), pid=document.getElementById('productSelect').value, qty=Number(document.getElementById('qty').value);
- if(!name||!pid||qty<1){msg('kasirMsg','Lengkapi nama kasir, produk, dan jumlah.');return}
- const p=products.find(x=>x.id===pid); if(!p)return;
- const payload={cashier_name:name,shift:document.getElementById('shift').value,product_id:p.id,product_name:p.name,unit_price:Number(p.price),qty,total:Number(p.price)*qty};
- const {error}=await sb.from('sales').insert(payload);
- if(error){msg('kasirMsg','Gagal menyimpan: '+error.message);return}
- msg('kasirMsg','Penjualan berhasil disimpan.',true);document.getElementById('qty').value=1;
-}
-async function loginMod(){
- const pass=document.getElementById('modPassword').value;
- if(!pass){msg('loginMsg','Masukkan password MOD.');return}
- const {data,error}=await sb.rpc('verify_mod_password',{p_password:pass});
- if(error){msg('loginMsg','Login MOD belum aktif. Jalankan SQL keamanan yang saya berikan.');return}
- if(data!==true){msg('loginMsg','Password MOD salah.');return}
- modPassword=pass;
- mod=true;
- document.getElementById('loginBox').classList.add('hidden');
- document.getElementById('modPanel').classList.remove('hidden');
- await loadMod();
-}
-async function loadSettings(){
- const {data,error}=await sb.rpc('get_mod_dashboard',{p_password:modPassword});
- if(!error&&data?.settings){
-   settings=data.settings;
-   targetPcs.value=data.settings.target_pcs||0;
-   targetOmzet.value=data.settings.target_omzet||0;
- }
-}
-async function saveSettings(){
- const {error}=await sb.rpc('mod_update_settings',{
-   p_password:modPassword,
-   p_target_pcs:Number(targetPcs.value)||0,
-   p_target_omzet:Number(targetOmzet.value)||0
- });
- if(error){alert('Gagal menyimpan target: '+error.message);return}
- await loadMod();
-}
-async function loadMod(){
- if(!mod)return;
- const {data,error}=await sb.rpc('get_mod_dashboard',{p_password:modPassword});
- if(error){alert('Gagal memuat dashboard MOD: '+error.message);return}
- settings=data?.settings||{target_pcs:0,target_omzet:0};
- sales=data?.sales||[];
- products=(data?.products||[]).filter(p=>p.active);
- targetPcs.value=settings.target_pcs||0;
- targetOmzet.value=settings.target_omzet||0;
- renderModProducts(); renderSales(); updateSummary(); renderChart();
- loadProducts();
-}
-async function addProduct(){
- const name=newProductName.value.trim(), price=Number(newProductPrice.value);
- if(!name||price<0){alert('Isi nama dan harga.');return}
- const {error}=await sb.rpc('mod_save_product',{
-   p_password:modPassword,p_id:null,p_name:name,p_price:price,p_active:true
- });
- if(error){alert('Gagal: '+error.message);return}
- newProductName.value='';newProductPrice.value='';await loadMod();
-}
-function renderModProducts(){
- modProducts.innerHTML=products.map(p=>`<div class="card" style="box-shadow:none;border:1px solid #eee">
- <div class="grid"><input id="n_${p.id}" value="${esc(p.name)}"><input id="p_${p.id}" type="number" value="${Number(p.price)}">
- <button class="success" onclick="updateProduct('${p.id}')">Simpan</button>
- <button class="danger" onclick="deleteProduct('${p.id}')">Nonaktifkan</button></div></div>`).join('');
-}
-async function updateProduct(id){
- const name=document.getElementById('n_'+id).value.trim(), price=Number(document.getElementById('p_'+id).value);
- if(!name||price<0)return alert('Nama/harga tidak valid.');
- const {error}=await sb.rpc('mod_save_product',{
-   p_password:modPassword,p_id:id,p_name:name,p_price:price,p_active:true
- });
- if(error)alert('Gagal: '+error.message);else await loadMod();
-}
-async function deleteProduct(id){
- if(!confirm('Nonaktifkan produk ini? Transaksi lama tetap tersimpan.'))return;
- const {error}=await sb.rpc('mod_save_product',{
-   p_password:modPassword,p_id:id,p_name:null,p_price:null,p_active:false
- });
- if(error)alert('Gagal: '+error.message);else await loadMod();
-}
-async function loadSales(){
- if(!mod)return;
- const {data,error}=await sb.rpc('get_mod_dashboard',{p_password:modPassword});
- if(error){alert('Gagal membaca penjualan: '+error.message);return}
- sales=data?.sales||[];
- renderSales();updateSummary();renderChart();
-}
-function filteredSales(){
- const m=monthFilter.value,c=(cashierFilter.value||'').toLowerCase();
- return sales.filter(s=>(!m||String(s.sold_at).slice(0,7)===m)&&(!c||String(s.cashier_name||'').toLowerCase().includes(c)));
-}
-function renderSales(){
- const arr=filteredSales();
- salesTable.innerHTML=`<table><thead><tr><th>Waktu</th><th>Kasir</th><th>Shift</th><th>Produk</th><th>Harga</th><th>Qty</th><th>Total</th><th>Aksi</th></tr></thead><tbody>${arr.map(s=>`<tr><td>${new Date(s.sold_at).toLocaleString('id-ID')}</td><td>${esc(s.cashier_name)}</td><td>${esc(s.shift)}</td><td>${esc(s.product_name)}</td><td>${rp(s.unit_price)}</td><td>${s.qty}</td><td>${rp(s.total)}</td><td><button class="danger" onclick="deleteSale('${s.id}')">Hapus</button></td></tr>`).join('')}</tbody></table>`;
-}
-async function deleteSale(id){
- if(!confirm('Hapus transaksi ini karena tidak valid?'))return;
- const {error}=await sb.rpc('mod_delete_sale',{p_password:modPassword,p_sale_id:id});
- if(error){alert('Gagal menghapus: '+error.message);return}
- await loadMod();
-}
-function updateSummary(){
- const arr=filteredSales(), pcs=arr.reduce((a,s)=>a+Number(s.qty),0), omzet=arr.reduce((a,s)=>a+Number(s.total),0);
- totalPcs.textContent=pcs;totalOmzet.textContent=rp(omzet);sumTargetPcs.textContent=settings.target_pcs||0;sumTargetOmzet.textContent=rp(settings.target_omzet);
-}
-function renderChart(){
- const sums={};filteredSales().forEach(s=>sums[s.product_name]=(sums[s.product_name]||0)+Number(s.qty));
- if(chart)chart.destroy();chart=new Chart(document.getElementById('chart'),{type:'bar',data:{labels:Object.keys(sums),datasets:[{label:'Pcs terjual',data:Object.values(sums)}]},options:{responsive:true}});
-}
-function exportCSV(){
- const arr=filteredSales(), rows=[['Waktu','Kasir','Shift','Produk','Harga Satuan','Qty','Total'],...arr.map(s=>[s.sold_at,s.cashier_name,s.shift,s.product_name,s.unit_price,s.qty,s.total])];
- const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n');
- const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='penjualan.csv';a.click();
-}
-sb.channel('sales-live').on('postgres_changes',{event:'*',schema:'public',table:'sales'},()=>{if(mod)loadMod()}).subscribe();
-loadProducts();
-</script>
+      <button onclick="loginMOD()" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 rounded shadow transition duration-200">Masuk Dashboard MOD</button>
+      <p id="loginError" class="text-xs text-rose-600 font-bold hidden">Password Salah! (Gunakan: BEAUTY BISA)</p>
+    </div>
+
+    <!-- TAB 3: DASHBOARD KONTROL MOD -->
+    <div id="sec-mod-content" class="hidden space-y-6">
+      
+      <!-- Pengaturan Nama Produk, SKU & Harga oleh MOD -->
+      <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-rose-500 space-y-4">
+        <h2 class="text-lg font-bold text-gray-800 border-b pb-2">🎯 Pengaturan Target &amp; Catalog Produk/Harga (MOD)</h2>
+        
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Daftar Produk &amp; Harga Satuan SKU (Format: Nama Produk : Harga, Dipisahkan koma):</label>
+          <div class="flex gap-2">
+            <input type="text" id="inputDaftarProduk" value="Produk Fokus A:25000, Produk Fokus B:15000, Lipstik:18000, Serum:12000, Lainnya:10000" class="w-full border p-2 rounded text-sm bg-pink-50 focus:bg-white border-pink-300 outline-none">
+            <button onclick="simpanDaftarProdukPerm()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold px-4 py-2 rounded text-xs whitespace-nowrap shadow">Simpan Produk Permanen</button>
+          </div>
+          <span class="text-xs text-gray-500 italic">*Format penulisan: <b>Nama Produk:Harga</b>. Contoh: <i>Lipstik:35000, Serum:50000</i></span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600">Target Total Produk Fokus (Pcs)</label>
+            <input type="number" id="targetPcs" value="100" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="updateDashboard()">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600">Target Omzet Toko (Rp)</label>
+            <input type="number" id="targetOmzet" value="2000000" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="updateDashboard()">
+          </div>
+        </div>
+      </div>
+
+      <!-- FILTER HISTORI & ARSIP BULANAN -->
+      <div class="bg-pink-100/60 border border-pink-200 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">📅</span>
+          <div>
+            <h3 class="font-bold text-gray-800 text-sm">Filter Histori &amp; Arsip Penjualan</h3>
+            <p class="text-xs text-gray-600">Pilih bulan dan tahun untuk melihat arsip laporan bulanan.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <label class="text-xs font-semibold text-gray-700 whitespace-nowrap">Bulan Laporan:</label>
+          <input type="month" id="filterBulan" class="border border-pink-300 p-2 rounded font-bold text-gray-800 text-sm bg-white focus:ring-2 focus:ring-pink-400 outline-none" onchange="updateDashboard()">
+        </div>
+      </div>
+
+      <!-- Ringkasan Capaian Target (KPI) MOD -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-5 rounded-lg shadow-md border-t-2 border-pink-300">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-bold text-gray-700">Penjualan Produk Fokus</span>
+            <span id="txtStatPcs" class="text-sm font-bold text-pink-600">0 / 100 Pcs</span>
+          </div>
+          <div class="w-full bg-pink-100 rounded-full h-4">
+            <div id="barPcs" class="bg-pink-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <p id="pctPcs" class="text-right text-xs font-bold mt-1 text-gray-500">0% Terpadu</p>
+        </div>
+
+        <div class="bg-white p-5 rounded-lg shadow-md border-t-2 border-rose-300">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-bold text-gray-700">Estimasi Total Omzet Toko</span>
+            <span id="txtStatOmzet" class="text-sm font-bold text-rose-600">Rp 0 / Rp 2.000.000</span>
+          </div>
+          <div class="w-full bg-rose-100 rounded-full h-4">
+            <div id="barOmzet" class="bg-rose-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <p id="pctOmzet" class="text-right text-xs font-bold mt-1 text-gray-500">0% Terpadu</p>
+        </div>
+      </div>
+
+      <!-- Visualisasi Grafik MOD -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-5 rounded-lg shadow-md border-t-2 border-pink-200">
+          <h3 class="font-bold text-gray-700 mb-4 text-center">Penjualan per Produk (Pcs)</h3>
+          <canvas id="chartProduk"></canvas>
+        </div>
+        <div class="bg-white p-5 rounded-lg shadow-md border-t-2 border-pink-200">
+          <h3 class="font-bold text-gray-700 mb-4 text-center">Performa Kasir (Pcs)</h3>
+          <canvas id="chartKasir"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabel Detail Laporan Kasir -->
+      <div class="bg-white p-5 rounded-lg shadow-md">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-gray-800">📋 Arsip &amp; Detail Laporan Masuk</h3>
+          <span id="labelPeriodeAktif" class="text-xs font-bold text-pink-700 bg-pink-100 px-3 py-1 rounded-full">Bulan: -</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-pink-50 border-b border-pink-200 text-gray-700 text-sm">
+                <th class="p-3">Tanggal &amp; Waktu</th>
+                <th class="p-3">Kasir</th>
+                <th class="p-3">Shift</th>
+                <th class="p-3">Produk</th>
+                <th class="p-3 text-right">Harga Satuan</th>
+                <th class="p-3 text-right">Qty (Pcs)</th>
+                <th class="p-3 text-right">Total Omzet</th>
+                <th class="p-3 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tabelLaporan" class="text-sm divide-y divide-pink-100">
+              <tr>
+                <td colspan="8" class="p-4 text-center text-gray-400">Belum ada laporan masuk.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Script Logika Integrasi Supabase -->
+  <script>
+    // ----------------------------------------------------
+    // CONFIGURASI SUPABASE DATABASE
+    // Ganti nilai di bawah ini dari Project Settings -> API Supabase Anda
+    // ----------------------------------------------------
+    const SUPABASE_URL = 'https://PROJECT_ID_ANDA.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    let _supabase = null;
+    let isSupabaseConfigured = false;
+
+    if (SUPABASE_URL !== 'https://PROJECT_ID_ANDA.supabase.co') {
+      _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      isSupabaseConfigured = true;
+    }
+
+    const MOD_PASSWORD = "BEAUTY BISA";
+
+    let isModLoggedIn = false;
+    let dbData = [];
+    let catalogProduk = {};
+    let myChartProduk = null;
+    let myChartKasir = null;
+
+    window.onload = function() {
+      const hariIni = new Date();
+      const formatBulan = hariIni.toISOString().slice(0, 7);
+      document.getElementById('filterBulan').value = formatBulan;
+
+      muatKatalogProduk();
+      muatDataArsip();
+    };
+
+    // 1. SIMPAN & MUAT PRODUK FOKUS PERMANEN (SUPABASE)
+    async function simpanDaftarProdukPerm() {
+      const val = document.getElementById('inputDaftarProduk').value;
+      if (isSupabaseConfigured) {
+        const { error } = await _supabase
+          .from('app_config')
+          .upsert({ id: 'daftarProduk', value: val });
+        
+        if (error) console.error("Gagal simpan produk:", error);
+      } else {
+        localStorage.setItem('permDaftarProduk', val);
+      }
+      simpanDaftarProduk();
+      alert('✅ Katalog produk berhasil disimpan secara permanen!');
+    }
+
+    async function muatKatalogProduk() {
+      if (isSupabaseConfigured) {
+        const { data, error } = await _supabase
+          .from('app_config')
+          .select('value')
+          .eq('id', 'daftarProduk')
+          .single();
+
+        if (data && data.value) {
+          document.getElementById('inputDaftarProduk').value = data.value;
+        }
+      } else {
+        const tersimpan = localStorage.getItem('permDaftarProduk');
+        if (tersimpan) document.getElementById('inputDaftarProduk').value = tersimpan;
+      }
+      simpanDaftarProduk();
+    }
+
+    function simpanDaftarProduk() {
+      const inputStr = document.getElementById('inputDaftarProduk').value;
+      const items = inputStr.split(',').map(item => item.trim()).filter(item => item !== '');
+      
+      catalogProduk = {};
+      const selectKasir = document.getElementById('kasirProduk');
+      selectKasir.innerHTML = '';
+
+      items.forEach(item => {
+        const parts = item.split(':');
+        const nama = parts[0] ? parts[0].trim() : 'Produk';
+        const harga = parts[1] ? parseInt(parts[1].trim()) || 0 : 0;
+
+        catalogProduk[nama] = harga;
+
+        const option = document.createElement('option');
+        option.value = nama;
+        option.innerText = `${nama} (Rp ${harga.toLocaleString('id-ID')})`;
+        selectKasir.appendChild(option);
+      });
+    }
+
+    // 2. KASIR INPUT PENJUALAN (SUPABASE)
+    document.getElementById('formPenjualan').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const prodSelected = document.getElementById('kasirProduk').value;
+      const hargaSatuan = catalogProduk[prodSelected] || 0;
+      const qty = parseInt(document.getElementById('kasirQty').value);
+      
+      const skr = new Date();
+      const tglString = skr.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const jamString = skr.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+      const bulanKey = skr.toISOString().slice(0, 7);
+
+      const item = {
+        bulan_key: bulanKey,
+        waktu: `${tglString} ${jamString}`,
+        kasir: document.getElementById('kasirNama').value,
+        shift: document.getElementById('kasirShift').value,
+        produk: prodSelected,
+        harga_satuan: hargaSatuan,
+        qty: qty,
+        total_omzet: qty * hargaSatuan
+      };
+
+      if (isSupabaseConfigured) {
+        const { error } = await _supabase.from('penjualan').insert([item]);
+        if (error) alert('Gagal menyimpan laporan!');
+        else {
+          alert('✅ Laporan berhasil dikirim!');
+          muatDataArsip();
+        }
+      } else {
+        item.id = Date.now().toString();
+        dbData.push(item);
+        localStorage.setItem('arsipPenjualanToko', JSON.stringify(dbData));
+        alert('✅ Laporan berhasil dikirim (Lokal)!');
+        updateDashboard();
+      }
+
+      this.reset();
+    });
+
+    // 3. AMBIL ARSIP DATA DARI SUPABASE
+    async function muatDataArsip() {
+      if (isSupabaseConfigured) {
+        const { data, error } = await _supabase.from('penjualan').select('*').order('created_at', { ascending: false });
+        if (!error && data) {
+          dbData = data.map(item => ({
+            id: item.id,
+            bulanKey: item.bulan_key,
+            waktu: item.waktu,
+            kasir: item.kasir,
+            shift: item.shift,
+            produk: item.produk,
+            hargaSatuan: item.harga_satuan,
+            qty: item.qty,
+            totalOmzet: item.total_omzet
+          }));
+        }
+      } else {
+        const tersimpan = localStorage.getItem('arsipPenjualanToko');
+        if (tersimpan) dbData = JSON.parse(tersimpan);
+      }
+      updateDashboard();
+    }
+
+    // 4. MOD HAPUS LAPORAN TIDAK VALID
+    async function hapusLaporan(id) {
+      if (confirm('Apakah Anda yakin ingin menghapus laporan tidak valid ini?')) {
+        if (isSupabaseConfigured) {
+          const { error } = await _supabase.from('penjualan').delete().eq('id', id);
+          if (!error) muatDataArsip();
+        } else {
+          dbData = dbData.filter(item => item.id !== id && item.id != id);
+          localStorage.setItem('arsipPenjualanToko', JSON.stringify(dbData));
+          updateDashboard();
+        }
+      }
+    }
+
+    // UTILS SYSTEM LOGIN MOD
+    function loginMOD() {
+      const passInput = document.getElementById('modPass').value.trim();
+      const errEl = document.getElementById('loginError');
+
+      if (passInput.toUpperCase() === MOD_PASSWORD.toUpperCase()) {
+        isModLoggedIn = true;
+        errEl.classList.add('hidden');
+        document.getElementById('sec-mod-login').classList.add('hidden');
+        document.getElementById('sec-mod-content').classList.remove('hidden');
+        document.getElementById('statusModLogin').classList.remove('hidden');
+        updateDashboard();
+      } else {
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function logoutMOD() {
+      isModLoggedIn = false;
+      document.getElementById('modPass').value = '';
+      document.getElementById('statusModLogin').classList.add('hidden');
+      switchTab('kasir');
+    }
+
+    function switchTab(tab) {
+      if(tab === 'kasir') {
+        document.getElementById('sec-kasir').classList.remove('hidden');
+        document.getElementById('sec-mod-login').classList.add('hidden');
+        document.getElementById('sec-mod-content').classList.add('hidden');
+        document.getElementById('tab-kasir').className = "py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none";
+        document.getElementById('tab-mod').className = "py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none";
+      } else {
+        document.getElementById('sec-kasir').classList.add('hidden');
+        document.getElementById('tab-mod').className = "py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none";
+        document.getElementById('tab-kasir').className = "py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none";
+
+        if (isModLoggedIn) {
+          document.getElementById('sec-mod-content').classList.remove('hidden');
+          document.getElementById('sec-mod-login').classList.add('hidden');
+          updateDashboard();
+        } else {
+          document.getElementById('sec-mod-login').classList.remove('hidden');
+          document.getElementById('sec-mod-content').classList.add('hidden');
+        }
+      }
+    }
+
+    function updateDashboard() {
+      if (!isModLoggedIn) return;
+
+      const targetPcs = parseInt(document.getElementById('targetPcs').value) || 1;
+      const targetOmzet = parseInt(document.getElementById('targetOmzet').value) || 1;
+      const bulanFilter = document.getElementById('filterBulan').value;
+
+      document.getElementById('labelPeriodeAktif').innerText = `Bulan Arsip: ${bulanFilter}`;
+
+      let totalPcs = 0;
+      let totalOmzet = 0;
+      let rekapProduk = {};
+      let rekapKasir = {};
+
+      const tbody = document.getElementById('tabelLaporan');
+      tbody.innerHTML = '';
+
+      const dataTerfilter = dbData.filter(row => row.bulanKey === bulanFilter);
+
+      if (dataTerfilter.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">Belum ada arsip laporan untuk periode ${bulanFilter}.</td></tr>`;
+      } else {
+        dataTerfilter.forEach(row => {
+          totalPcs += row.qty;
+          totalOmzet += row.totalOmzet;
+
+          rekapProduk[row.produk] = (rekapProduk[row.produk] || 0) + row.qty;
+          rekapKasir[row.kasir] = (rekapKasir[row.kasir] || 0) + row.qty;
+
+          tbody.innerHTML += `
+            <tr class="hover:bg-pink-50/50">
+              <td class="p-3 font-semibold text-gray-600">${row.waktu}</td>
+              <td class="p-3 font-semibold">${row.kasir}</td>
+              <td class="p-3">${row.shift}</td>
+              <td class="p-3">${row.produk}</td>
+              <td class="p-3 text-right">Rp ${row.hargaSatuan.toLocaleString('id-ID')}</td>
+              <td class="p-3 text-right font-bold text-pink-600">${row.qty} Pcs</td>
+              <td class="p-3 text-right font-bold text-rose-600">Rp ${row.totalOmzet.toLocaleString('id-ID')}</td>
+              <td class="p-3 text-center">
+                <button onclick="hapusLaporan('${row.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-1 rounded text-xs shadow">🗑️ Hapus</button>
+              </td>
+            </tr>
+          `;
+        });
+      }
+
+      const pctPcs = Math.min(100, Math.round((totalPcs / targetPcs) * 100));
+      const pctOmzet = Math.min(100, Math.round((totalOmzet / targetOmzet) * 100));
+
+      document.getElementById('txtStatPcs').innerText = `${totalPcs} / ${targetPcs} Pcs`;
+      document.getElementById('barPcs').style.width = `${pctPcs}%`;
+      document.getElementById('pctPcs').innerText = `${pctPcs}% Terpadu`;
+
+      document.getElementById('txtStatOmzet').innerText = `Rp ${totalOmzet.toLocaleString('id-ID')} / Rp ${targetOmzet.toLocaleString('id-ID')}`;
+      document.getElementById('barOmzet').style.width = `${pctOmzet}%`;
+      document.getElementById('pctOmzet').innerText = `${pctOmzet}% Terpadu`;
+
+      renderCharts(rekapProduk, rekapKasir);
+    }
+
+    function renderCharts(produkData, kasirData) {
+      const pinkPalette = ['#ec4899', '#f43f5e', '#fb7185', '#f472b6', '#e879f9'];
+
+      const ctx1 = document.getElementById('chartProduk').getContext('2d');
+      if(myChartProduk) myChartProduk.destroy();
+      myChartProduk = new Chart(ctx1, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(produkData).length > 0 ? Object.keys(produkData) : ['Belum Ada Data'],
+          datasets: [{ 
+            data: Object.values(produkData).length > 0 ? Object.values(produkData) : [1], 
+            backgroundColor: Object.values(produkData).length > 0 ? pinkPalette : ['#fbcfe8'] 
+          }]
+        }
+      });
+
+      const ctx2 = document.getElementById('chartKasir').getContext('2d');
+      if(myChartKasir) myChartKasir.destroy();
+      myChartKasir = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(kasirData),
+          datasets: [{ label: 'Pcs Terjual', data: Object.values(kasirData), backgroundColor: '#ec4899' }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+      });
+    }
+  </script>
 </body>
 </html>
