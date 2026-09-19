@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Kontrol Penjualan Toko (Supabase)</title>
+  <title>Dashboard Kontrol Penjualan Toko (Supabase Realtime Sync)</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -20,7 +20,7 @@
     <div class="bg-pink-600 text-white p-5 rounded-lg shadow-md flex justify-between items-center">
       <div>
         <h1 class="text-2xl font-bold">📊 Tool Kontrol &amp; Monitoring Penjualan</h1>
-        <p class="text-pink-100 text-sm">Alat Ukur Target Harian Toko &amp; Laporan Kasir (Supabase Cloud)</p>
+        <p class="text-pink-100 text-sm">Alat Ukur Target Harian Toko &amp; Laporan Kasir (Realtime Cloud)</p>
       </div>
       <div id="statusModLogin" class="hidden text-right">
         <span class="bg-rose-500 text-white text-xs px-2 py-1 rounded font-bold">MOD Terverifikasi</span>
@@ -89,29 +89,35 @@
     <!-- TAB 3: DASHBOARD KONTROL MOD -->
     <div id="sec-mod-content" class="hidden space-y-6">
       
-      <!-- Pengaturan Nama Produk, SKU & Harga oleh MOD -->
+      <!-- Pengaturan Target & Catalog Produk oleh MOD -->
       <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-rose-500 space-y-4">
-        <h2 class="text-lg font-bold text-gray-800 border-b pb-2">🎯 Pengaturan Target &amp; Catalog Produk/Harga (MOD)</h2>
+        <h2 class="text-lg font-bold text-gray-800 border-b pb-2 flex justify-between items-center">
+          <span>🎯 Pengaturan Target &amp; Catalog Produk (MOD)</span>
+          <span id="saveNotice" class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hidden border border-emerald-200">✓ Otomatis Tersimpan ke Semua HP</span>
+        </h2>
         
         <div>
           <label class="block text-xs font-bold text-gray-700 mb-1">Daftar Produk &amp; Harga Satuan SKU (Format: Nama Produk : Harga, Dipisahkan koma):</label>
           <div class="flex gap-2">
             <input type="text" id="inputDaftarProduk" value="Produk Fokus A:25000, Produk Fokus B:15000, Lipstik:18000, Serum:12000, Lainnya:10000" class="w-full border p-2 rounded text-sm bg-pink-50 focus:bg-white border-pink-300 outline-none">
-            <button onclick="simpanDaftarProdukPerm()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold px-4 py-2 rounded text-xs whitespace-nowrap shadow">Simpan Produk Permanen</button>
+            <button onclick="simpanDaftarProdukPerm()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold px-4 py-2 rounded text-xs whitespace-nowrap shadow">Simpan Katalog</button>
           </div>
           <span class="text-xs text-gray-500 italic">*Format penulisan: <b>Nama Produk:Harga</b>. Contoh: <i>Lipstik:35000, Serum:50000</i></span>
         </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-  <div>
-    <label class="block text-xs font-semibold text-gray-600">Target Total Produk Fokus (Pcs)</label>
-    <input type="number" id="targetPcs" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" oninput="simpanTargetPerm()">
-  </div>
-  <div>
-    <label class="block text-xs font-semibold text-gray-600">Target Omzet Toko (Rp)</label>
-    <input type="number" id="targetOmzet" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="oninput="simpanTargetPerm()")">
-  </div>
-</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Target Total Produk Fokus (Pcs)</label>
+            <input type="number" id="targetPcs" value="100" class="w-full border border-pink-200 p-2 rounded font-bold text-pink-600 outline-none focus:ring-2 focus:ring-pink-400" oninput="simpanTargetPerm()">
+            <span class="text-[10px] text-gray-400">*Ubah angka di atas, otomatis tersimpan &amp; ter-update di semua HP.</span>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Target Omzet Toko (Rp)</label>
+            <input type="number" id="targetOmzet" value="2000000" class="w-full border border-pink-200 p-2 rounded font-bold text-rose-600 outline-none focus:ring-2 focus:ring-rose-400" oninput="simpanTargetPerm()">
+            <span class="text-[10px] text-gray-400">*Ubah angka di atas, otomatis tersimpan &amp; ter-update di semua HP.</span>
+          </div>
+        </div>
+      </div>
 
       <!-- FILTER HISTORI & ARSIP BULANAN -->
       <div class="bg-pink-100/60 border border-pink-200 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
@@ -197,14 +203,13 @@
     </div>
   </div>
 
-  <!-- Script Logika Integrasi Supabase -->
+  <!-- Script Logika Integrasi Supabase Realtime -->
   <script>
     // ----------------------------------------------------
-    // CONFIGURASI SUPABASE DATABASE
-    // Ganti nilai di bawah ini dari Project Settings -> API Supabase Anda
+    // KREDENSIAL SUPABASE DATABASE
     // ----------------------------------------------------
-    const SUPABASE_URL ='https://flspisfbdwkrpjajgtpr.supabase.co'; 
-    const SUPABASE_ANON_KEY ='sb_publishable_3EUPPqpdZCCDsiNIFVU9Jg_WVyl-HER';
+    const SUPABASE_URL = 'https://flspisfbdwkrpjajgtpr.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_3EUPPqpdZCCDsiNIFVU9Jg_WVyl-HER';
 
     let _supabase = null;
     let isSupabaseConfigured = false;
@@ -214,13 +219,14 @@
       isSupabaseConfigured = true;
     }
 
-   const MOD_PASSWORD = "BEAUTY BISA";
+    const MOD_PASSWORD = "BEAUTY BISA";
 
     let isModLoggedIn = false;
     let dbData = [];
     let catalogProduk = {};
     let myChartProduk = null;
     let myChartKasir = null;
+    let debounceTimer = null;
 
     window.onload = function() {
       const hariIni = new Date();
@@ -228,36 +234,99 @@
       document.getElementById('filterBulan').value = formatBulan;
 
       muatKatalogProduk();
+      muatTargetCloud();
       muatDataArsip();
+
+      if (isSupabaseConfigured) {
+        setupRealtimeSubscription();
+      }
     };
 
-    // 1. SIMPAN & MUAT PRODUK FOKUS PERMANEN (SUPABASE)
+    // 1. SINKRONISASI REALTIME KE SEMUA HP
+    function setupRealtimeSubscription() {
+      _supabase
+        .channel('public-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'app_config' }, payload => {
+          if (payload.new && payload.new.key === 'targetPcs') {
+            document.getElementById('targetPcs').value = payload.new.value;
+          }
+          if (payload.new && payload.new.key === 'targetOmzet') {
+            document.getElementById('targetOmzet').value = payload.new.value;
+          }
+          if (payload.new && payload.new.key === 'daftarProduk') {
+            document.getElementById('inputDaftarProduk').value = payload.new.value;
+            simpanDaftarProduk();
+          }
+          updateDashboard();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'penjualan' }, () => {
+          muatDataArsip();
+        })
+        .subscribe();
+    }
+
+    // 2. SIMPAN TARGET OTOMATIS KE SUPABASE SAAT KETIK
+    function simpanTargetPerm() {
+      updateDashboard();
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const pcs = document.getElementById('targetPcs').value;
+        const omzet = document.getElementById('targetOmzet').value;
+
+        if (isSupabaseConfigured) {
+          await _supabase.from('app_config').upsert({ key: 'targetPcs', value: String(pcs) }, { onConflict: 'key' });
+          await _supabase.from('app_config').upsert({ key: 'targetOmzet', value: String(omzet) }, { onConflict: 'key' });
+          
+          tampilkanNotifTersimpan();
+        } else {
+          localStorage.setItem('permTargetPcs', pcs);
+          localStorage.setItem('permTargetOmzet', omzet);
+        }
+      }, 500);
+    }
+
+    function tampilkanNotifTersimpan() {
+      const notif = document.getElementById('saveNotice');
+      if (notif) {
+        notif.classList.remove('hidden');
+        setTimeout(() => notif.classList.add('hidden'), 2500);
+      }
+    }
+
+    async function muatTargetCloud() {
+      if (isSupabaseConfigured) {
+        const { data: dataPcs } = await _supabase.from('app_config').select('value').eq('key', 'targetPcs').maybeSingle();
+        const { data: dataOmzet } = await _supabase.from('app_config').select('value').eq('key', 'targetOmzet').maybeSingle();
+
+        if (dataPcs && dataPcs.value) document.getElementById('targetPcs').value = dataPcs.value;
+        if (dataOmzet && dataOmzet.value) document.getElementById('targetOmzet').value = dataOmzet.value;
+      } else {
+        const pcsLokal = localStorage.getItem('permTargetPcs');
+        const omzetLokal = localStorage.getItem('permTargetOmzet');
+        if (pcsLokal) document.getElementById('targetPcs').value = pcsLokal;
+        if (omzetLokal) document.getElementById('targetOmzet').value = omzetLokal;
+      }
+      updateDashboard();
+    }
+
+    // 3. PENGATURAN KATALOG PRODUK
     async function simpanDaftarProdukPerm() {
       const val = document.getElementById('inputDaftarProduk').value;
       if (isSupabaseConfigured) {
-        const { error } = await _supabase
-          .from('app_config')
-          .upsert({ id: 'daftarProduk', value: val });
-        
+        const { error } = await _supabase.from('app_config').upsert({ key: 'daftarProduk', value: val }, { onConflict: 'key' });
         if (error) console.error("Gagal simpan produk:", error);
+        else tampilkanNotifTersimpan();
       } else {
         localStorage.setItem('permDaftarProduk', val);
       }
       simpanDaftarProduk();
-      alert('✅ Katalog produk berhasil disimpan secara permanen!');
     }
 
     async function muatKatalogProduk() {
       if (isSupabaseConfigured) {
-        const { data, error } = await _supabase
-          .from('app_config')
-          .select('value')
-          .eq('id', 'daftarProduk')
-          .single();
-
-        if (data && data.value) {
-          document.getElementById('inputDaftarProduk').value = data.value;
-        }
+        const { data } = await _supabase.from('app_config').select('value').eq('key', 'daftarProduk').maybeSingle();
+        if (data && data.value) document.getElementById('inputDaftarProduk').value = data.value;
       } else {
         const tersimpan = localStorage.getItem('permDaftarProduk');
         if (tersimpan) document.getElementById('inputDaftarProduk').value = tersimpan;
@@ -282,22 +351,15 @@
 
         const option = document.createElement('option');
         option.value = nama;
-        option.innerText = ${nama} (Rp ${harga.toLocaleString('id-ID')});
+        option.innerText = `${nama} (Rp ${harga.toLocaleString('id-ID')})`;
         selectKasir.appendChild(option);
       });
     }
 
-    // 2. KASIR INPUT PENJUALAN (SUPABASE)
+    // 4. KASIR INPUT PENJUALAN
     document.getElementById('formPenjualan').addEventListener('submit', async function(e) {
       e.preventDefault();
       
-      const prodSelected = document.getElementById('kasirProduk').value;
-      const hargaSatuan = catalogProduk[prodSelected] || 0;
-      const qty = parseInt(document.getElementById('kasirQty').value);
-      
-      const prodSelected = document.getElementById('kasirProduk').value;
-      const hargaSatuan = catalogProduk[prodSelected] || 0;
-      const qty = parseInt(document.getElementById('kasirQty').value);
       const prodSelected = document.getElementById('kasirProduk').value;
       const hargaSatuan = catalogProduk[prodSelected] || 0;
       const qty = parseInt(document.getElementById('kasirQty').value);
@@ -336,7 +398,7 @@
       this.reset();
     });
 
-    // 3. AMBIL ARSIP DATA DARI SUPABASE
+    // 5. AMBIL ARSIP DATA DARI SUPABASE
     async function muatDataArsip() {
       if (isSupabaseConfigured) {
         const { data, error } = await _supabase.from('penjualan').select('*').order('created_at', { ascending: false });
@@ -360,7 +422,7 @@
       updateDashboard();
     }
 
-    // 4. MOD HAPUS LAPORAN TIDAK VALID
+    // 6. MOD HAPUS LAPORAN
     async function hapusLaporan(id) {
       if (confirm('Apakah Anda yakin ingin menghapus laporan tidak valid ini?')) {
         if (isSupabaseConfigured) {
