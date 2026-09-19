@@ -102,17 +102,16 @@
           <span class="text-xs text-gray-500 italic">*Format penulisan: <b>Nama Produk:Harga</b>. Contoh: <i>Lipstik:35000, Serum:50000</i></span>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          <div>
-            <label class="block text-xs font-semibold text-gray-600">Target Total Produk Fokus (Pcs)</label>
-            <input type="number" id="targetPcs" value="100" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="updateDashboard()">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600">Target Omzet Toko (Rp)</label>
-            <input type="number" id="targetOmzet" value="2000000" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="updateDashboard()">
-          </div>
-        </div>
-      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+  <div>
+    <label class="block text-xs font-semibold text-gray-600">Target Total Produk Fokus (Pcs)</label>
+    <input type="number" id="targetPcs" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="updateDashboard()">
+  </div>
+  <div>
+    <label class="block text-xs font-semibold text-gray-600">Target Omzet Toko (Rp)</label>
+    <input type="number" id="targetOmzet" class="w-full border border-pink-200 p-2 rounded font-bold text-gray-800 outline-none" onchange="updateDashboard()">
+  </div>
+</div>
 
       <!-- FILTER HISTORI & ARSIP BULANAN -->
       <div class="bg-pink-100/60 border border-pink-200 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm">
@@ -215,7 +214,7 @@
       isSupabaseConfigured = true;
     }
 
-    const MOD_PASSWORD = "BEAUTY BISA";
+   const MOD_PASSWORD = "BEAUTY BISA";
 
     let isModLoggedIn = false;
     let dbData = [];
@@ -229,68 +228,50 @@
       document.getElementById('filterBulan').value = formatBulan;
 
       muatKatalogProduk();
+      loadTargetPerm(); // <-- MEMUAT TARGET OTOMATIS DARI SUPABASE
       muatDataArsip();
     };
 
-    // 1. SIMPAN & MUAT PRODUK FOKUS PERMANEN (SUPABASE)
-    async function simpanDaftarProdukPerm() {
-      const val = document.getElementById('inputDaftarProduk').value;
+    // 1. Fungsi Simpan Target ke Supabase saat MOD mengubah angka
+    async function updateDashboard() {
+      const pcsBaru = document.getElementById('targetPcs').value;
+      const omzetBaru = document.getElementById('targetOmzet').value;
+
       if (isSupabaseConfigured) {
         const { error } = await _supabase
           .from('app_config')
-          .upsert({ id: 'daftarProduk', value: val });
-        
-        if (error) console.error("Gagal simpan produk:", error);
-      } else {
-        localStorage.setItem('permDaftarProduk', val);
+          .upsert({ 
+            id: 'targetPenjualan', 
+            value: JSON.stringify({ targetPcs: pcsBaru, targetOmzet: omzetBaru }) 
+          });
+
+        if (error) {
+          console.error('Gagal menyimpan target:', error.message);
+        } else {
+          console.log('Target berhasil disimpan permanen!');
+        }
       }
-      simpanDaftarProduk();
-      alert('✅ Katalog produk berhasil disimpan secara permanen!');
     }
 
-    async function muatKatalogProduk() {
+    // 2. Fungsi Mengambil Data Target dari Supabase
+    async function loadTargetPerm() {
       if (isSupabaseConfigured) {
-        const { data, error } = await _supabase
+        const { data } = await _supabase
           .from('app_config')
           .select('value')
-          .eq('id', 'daftarProduk')
+          .eq('id', 'targetPenjualan')
           .single();
 
         if (data && data.value) {
-          document.getElementById('inputDaftarProduk').value = data.value;
+          const parsed = JSON.parse(data.value);
+          document.getElementById('targetPcs').value = parsed.targetPcs;
+          document.getElementById('targetOmzet').value = parsed.targetOmzet;
         }
-      } else {
-        const tersimpan = localStorage.getItem('permDaftarProduk');
-        if (tersimpan) document.getElementById('inputDaftarProduk').value = tersimpan;
       }
-      simpanDaftarProduk();
     }
 
-    function simpanDaftarProduk() {
-      const inputStr = document.getElementById('inputDaftarProduk').value;
-      const items = inputStr.split(',').map(item => item.trim()).filter(item => item !== '');
-      
-      catalogProduk = {};
-      const selectKasir = document.getElementById('kasirProduk');
-      selectKasir.innerHTML = '';
-
-      items.forEach(item => {
-        const parts = item.split(':');
-        const nama = parts[0] ? parts[0].trim() : 'Produk';
-        const harga = parts[1] ? parseInt(parts[1].trim()) || 0 : 0;
-
-        catalogProduk[nama] = harga;
-
-        const option = document.createElement('option');
-        option.value = nama;
-        option.innerText = `${nama} (Rp ${harga.toLocaleString('id-ID')})`;
-        selectKasir.appendChild(option);
-      });
-    }
-
-    // 2. KASIR INPUT PENJUALAN (SUPABASE)
+    // 3. KASIR INPUT PENJUALAN (SUPABASE)
     document.getElementById('formPenjualan').addEventListener('submit', async function(e) {
-      e.preventDefault();
       
       const prodSelected = document.getElementById('kasirProduk').value;
       const hargaSatuan = catalogProduk[prodSelected] || 0;
