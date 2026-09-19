@@ -228,87 +228,72 @@
       document.getElementById('filterBulan').value = formatBulan;
 
       muatKatalogProduk();
-      muatTargetCloud();
-      loadTargetPerm(); // <-- MEMUAT TARGET OTOMATIS DARI SUPABASE
       muatDataArsip();
     };
-    let debounceTimer = null;
 
-function simpanTargetPerm() {
-  updateDashboard();
-
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(async () => {
-    const pcs = document.getElementById('targetPcs').value;
-    const omzet = document.getElementById('targetOmzet').value;
-
-    if (isSupabaseConfigured && _supabase) {
-      await _supabase.from('app_config').upsert({ key: 'targetPcs', value: String(pcs) }, { onConflict: 'key' });
-      await _supabase.from('app_config').upsert({ key: 'targetOmzet', value: String(omzet) }, { onConflict: 'key' });
-    } else {
-      localStorage.setItem('permTargetPcs', pcs);
-      localStorage.setItem('permTargetOmzet', omzet);
-    }
-  }, 500);
-}
-
-async function muatTargetCloud() {
-  if (isSupabaseConfigured && _supabase) {
-    const { data: dataPcs } = await _supabase.from('app_config').select('value').eq('key', 'targetPcs').maybeSingle();
-    const { data: dataOmzet } = await _supabase.from('app_config').select('value').eq('key', 'targetOmzet').maybeSingle();
-
-    if (dataPcs && dataPcs.value) document.getElementById('targetPcs').value = dataPcs.value;
-    if (dataOmzet && dataOmzet.value) document.getElementById('targetOmzet').value = dataOmzet.value;
-  } else {
-    const pcsLokal = localStorage.getItem('permTargetPcs');
-    const omzetLokal = localStorage.getItem('permTargetOmzet');
-    if (pcsLokal) document.getElementById('targetPcs').value = pcsLokal;
-    if (omzetLokal) document.getElementById('targetOmzet').value = omzetLokal;
-  }
-  updateDashboard();
-}
-
-    // 1. Fungsi Simpan Target ke Supabase saat MOD mengubah angka
-    async function updateDashboard() {
-      const pcsBaru = document.getElementById('targetPcs').value;
-      const omzetBaru = document.getElementById('targetOmzet').value;
-
+    // 1. SIMPAN & MUAT PRODUK FOKUS PERMANEN (SUPABASE)
+    async function simpanDaftarProdukPerm() {
+      const val = document.getElementById('inputDaftarProduk').value;
       if (isSupabaseConfigured) {
         const { error } = await _supabase
           .from('app_config')
-          .upsert({ 
-            id: 'targetPenjualan', 
-            value: JSON.stringify({ targetPcs: pcsBaru, targetOmzet: omzetBaru }) 
-          });
-
-        if (error) {
-          console.error('Gagal menyimpan target:', error.message);
-        } else {
-          console.log('Target berhasil disimpan permanen!');
-        }
+          .upsert({ id: 'daftarProduk', value: val });
+        
+        if (error) console.error("Gagal simpan produk:", error);
+      } else {
+        localStorage.setItem('permDaftarProduk', val);
       }
+      simpanDaftarProduk();
+      alert('✅ Katalog produk berhasil disimpan secara permanen!');
     }
 
-    // 2. Fungsi Mengambil Data Target dari Supabase
-    async function loadTargetPerm() {
+    async function muatKatalogProduk() {
       if (isSupabaseConfigured) {
-        const { data } = await _supabase
+        const { data, error } = await _supabase
           .from('app_config')
           .select('value')
-          .eq('id', 'targetPenjualan')
+          .eq('id', 'daftarProduk')
           .single();
 
         if (data && data.value) {
-          const parsed = JSON.parse(data.value);
-          document.getElementById('targetPcs').value = parsed.targetPcs;
-          document.getElementById('targetOmzet').value = parsed.targetOmzet;
+          document.getElementById('inputDaftarProduk').value = data.value;
         }
+      } else {
+        const tersimpan = localStorage.getItem('permDaftarProduk');
+        if (tersimpan) document.getElementById('inputDaftarProduk').value = tersimpan;
       }
+      simpanDaftarProduk();
     }
 
-    // 3. KASIR INPUT PENJUALAN (SUPABASE)
-    document.getElementById('formPenjualan').addEventListener('submit', async function(e) {
+    function simpanDaftarProduk() {
+      const inputStr = document.getElementById('inputDaftarProduk').value;
+      const items = inputStr.split(',').map(item => item.trim()).filter(item => item !== '');
       
+      catalogProduk = {};
+      const selectKasir = document.getElementById('kasirProduk');
+      selectKasir.innerHTML = '';
+
+      items.forEach(item => {
+        const parts = item.split(':');
+        const nama = parts[0] ? parts[0].trim() : 'Produk';
+        const harga = parts[1] ? parseInt(parts[1].trim()) || 0 : 0;
+
+        catalogProduk[nama] = harga;
+
+        const option = document.createElement('option');
+        option.value = nama;
+        option.innerText = ${nama} (Rp ${harga.toLocaleString('id-ID')});
+        selectKasir.appendChild(option);
+      });
+    }
+
+    // 2. KASIR INPUT PENJUALAN (SUPABASE)
+    document.getElementById('formPenjualan').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const prodSelected = document.getElementById('kasirProduk').value;
+      const hargaSatuan = catalogProduk[prodSelected] || 0;
+      const qty = parseInt(document.getElementById('kasirQty').value);
       const prodSelected = document.getElementById('kasirProduk').value;
       const hargaSatuan = catalogProduk[prodSelected] || 0;
       const qty = parseInt(document.getElementById('kasirQty').value);
