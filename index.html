@@ -668,13 +668,16 @@
     function updateTargetMingguan() {
       const tbody = document.getElementById('tabelTargetMingguan');
       if (!tbody) return;
+
       const range = getWeekRange(document.getElementById('filterMinggu').value);
-      const produk = document.getElementById('produkFokusMingguan').value;
-      const target = Math.max(0, parseInt(document.getElementById('targetMingguanPcs').value) || 0);
+      const productId = document.getElementById('produkFokusMingguan').value;
+      const target = Math.max(0, parseInt(document.getElementById('targetMingguanPcs').value, 10) || 0);
       const label = document.getElementById('labelTargetMingguan');
       const status = document.getElementById('statusTargetMingguan');
+      const product = catalogProductsList.find(p => String(p.id) === String(productId));
+      const productName = product ? product.name : '';
 
-      if (!range || !produk) {
+      if (!range || !productId || !productName) {
         tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">Pilih produk fokus dan minggu terlebih dahulu.</td></tr>';
         label.innerText = '-';
         status.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500';
@@ -682,16 +685,21 @@
         return;
       }
 
-      const weekly = dbData.filter(row => row.produk === produk && isRowInSelectedWeek(row, range));
+      const weekly = dbData.filter(row => {
+        const sameProduct = row.productId
+          ? String(row.productId) === String(productId)
+          : String(row.produk || '').trim().toLowerCase() === productName.trim().toLowerCase();
+        return sameProduct && isRowInSelectedWeek(row, range);
+      });
+
       const perKasir = {};
       weekly.forEach(row => {
         const nama = row.kasir || 'Tanpa Nama';
-        perKasir[nama] = (perKasir[nama] || 0) + (parseInt(row.qty) || 0);
+        perKasir[nama] = (perKasir[nama] || 0) + (parseInt(row.qty, 10) || 0);
       });
 
-      // Semua kasir tetap tampil, termasuk kasir yang 0 pcs pada minggu tersebut.
       const kasirNames = [...new Set(dbData.map(row => row.kasir).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-      label.innerText = `${produk} • Target ${target} pcs/kasir • ${document.getElementById('filterMinggu').value}`;
+      label.innerText = `${productName} • Target ${target} pcs/kasir • ${document.getElementById('filterMinggu').value}`;
 
       if (kasirNames.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">Belum ada data kasir.</td></tr>';
@@ -702,7 +710,7 @@
 
       let tercapai = 0;
       tbody.innerHTML = kasirNames.map(nama => {
-        const terjual = perKasir[nama];
+        const terjual = perKasir[nama] || 0;
         const selisih = terjual - target;
         const ok = selisih >= 0;
         if (ok) tercapai++;
@@ -849,6 +857,7 @@
             kasir: item.cashier_name || 'Tanpa Nama',
             shift: item.shift || '-',
             produk: item.product_name || '-',
+            productId: item.product_id || null,
             hargaSatuan: Number(item.unit_price) || 0,
             qty: Number(item.qty) || 0,
             totalOmzet: Number(item.total) || 0,
@@ -867,6 +876,7 @@
             kasir: item.kasir,
             shift: item.shift,
             produk: item.produk,
+            productId: null,
             hargaSatuan: Number(item.harga_satuan) || 0,
             qty: Number(item.qty) || 0,
             totalOmzet: Number(item.total_omzet) || 0,
@@ -961,8 +971,8 @@
     function updateDashboard() {
       if (!isModLoggedIn) return;
 
-      const targetPcs = parseInt(document.getElementById('targetPcs').value) || 1;
-      const targetOmzet = parseInt(document.getElementById('targetOmzet').value) || 1;
+      const targetPcs = Math.max(0, parseInt(document.getElementById('targetPcs').value, 10) || 0);
+      const targetOmzet = Math.max(0, Number(document.getElementById('targetOmzet').value) || 0);
       const bulanFilter = document.getElementById('filterBulan').value;
 
       document.getElementById('labelPeriodeAktif').innerText = `Bulan Arsip: ${bulanFilter}`;
@@ -1004,8 +1014,8 @@
         });
       }
 
-      const pctPcs = Math.min(100, Math.round((totalPcs / targetPcs) * 100));
-      const pctOmzet = Math.min(100, Math.round((totalOmzet / targetOmzet) * 100));
+      const pctPcs = targetPcs > 0 ? Math.min(100, Math.round((totalPcs / targetPcs) * 100)) : 0;
+      const pctOmzet = targetOmzet > 0 ? Math.min(100, Math.round((totalOmzet / targetOmzet) * 100)) : 0;
 
       document.getElementById('txtStatPcs').innerText = `${totalPcs} / ${targetPcs} Pcs`;
       document.getElementById('barPcs').style.width = `${pctPcs}%`;
