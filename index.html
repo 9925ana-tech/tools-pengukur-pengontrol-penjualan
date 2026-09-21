@@ -271,6 +271,8 @@
     let isModLoggedIn = false;
     let dbData = [];
     let catalogProduk = {};
+    let catalogProductsList = [];
+    let catalogProdukById = {};
     let myChartProduk = null;
     let myChartKasir = null;
     let debounceTimer = null;
@@ -308,6 +310,9 @@
         .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, async () => {
           await muatKatalogProduk();
           await muatTargetMingguanCloud();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => {
+          muatDataArsip();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'penjualan' }, () => {
           muatDataArsip();
@@ -771,12 +776,27 @@
 
       try {
         if (isSupabaseConfigured && _supabase) {
-          const { error } = await _supabase
-            .from('penjualan')
-            .insert([item]);
+          const productRow = Object.values(catalogProdukById).find(p => p.name === prodSelected);
+          const salesRow = {
+            cashier_name: namaKasir,
+            shift: document.getElementById('kasirShift').value,
+            product_id: productRow ? productRow.id : null,
+            product_name: prodSelected,
+            unit_price: hargaSatuan,
+            qty: qty,
+            total: qty * hargaSatuan
+          };
+
+          let { error } = await _supabase.from('sales').insert([salesRow]);
 
           if (error) {
-            console.error('Supabase penjualan error:', error);
+            console.warn('Tabel sales gagal, mencoba tabel penjualan lama:', error);
+            const fallback = await _supabase.from('penjualan').insert([item]);
+            error = fallback.error;
+          }
+
+          if (error) {
+            console.error('Supabase sales/penjualan error:', error);
             alert(
               '❌ Laporan belum tersimpan ke database.\n\n' +
               'Pesan Supabase: ' + (error.message || 'Error tidak diketahui') +
@@ -818,30 +838,44 @@
     // 5. AMBIL ARSIP DATA DARI SUPABASE
     async function muatDataArsip() {
       if (isSupabaseConfigured) {
-        const { data, error } = await _supabase
-          .from('penjualan')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Gagal membaca laporan dari Supabase:', error);
-          return;
+        let rows = [];
+        const salesResult = await _supabase.from('sales').select('*').order('sold_at', { ascending: false });
+        if (!salesResult.error && salesResult.data) {
+          rows = rows.concat(salesResult.data.map(item => ({
+            id: 'sales:' + item.id,
+            sourceTable: 'sales',
+            bulanKey: item.sold_at ? new Date(item.sold_at).toISOString().slice(0,7) : '',
+            waktu: item.sold_at ? new Date(item.sold_at).toLocaleString('id-ID') : '',
+            kasir: item.cashier_name || 'Tanpa Nama',
+            shift: item.shift || '-',
+            produk: item.product_name || '-',
+            hargaSatuan: Number(item.unit_price) || 0,
+            qty: Number(item.qty) || 0,
+            totalOmzet: Number(item.total) || 0,
+            createdAt: item.sold_at || null
+          })));
         }
 
-        if (data) {
-          dbData = data.map(item => ({
-            id: item.id,
+        // Baca data lama agar laporan yang sudah ada tetap tampil.
+        const oldResult = await _supabase.from('penjualan').select('*').order('created_at', { ascending: false });
+        if (!oldResult.error && oldResult.data) {
+          rows = rows.concat(oldResult.data.map(item => ({
+            id: 'penjualan:' + item.id,
+            sourceTable: 'penjualan',
             bulanKey: item.bulan_key,
             waktu: item.waktu,
             kasir: item.kasir,
             shift: item.shift,
             produk: item.produk,
-            hargaSatuan: item.harga_satuan,
-            qty: item.qty,
+            hargaSatuan: Number(item.harga_satuan) || 0,
+            qty: Number(item.qty) || 0,
             totalOmzet: Number(item.total_omzet) || 0,
             createdAt: item.created_at || null
-          }));
+          })));
         }
+
+        rows.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        dbData = rows;
       } else {
         const tersimpan = localStorage.getItem('arsipPenjualanToko');
         if (tersimpan) dbData = JSON.parse(tersimpan);
@@ -851,15 +885,29 @@
 
     // 6. MOD HAPUS LAPORAN
     async function hapusLaporan(id) {
-      if (confirm('Apakah Anda yakin ingin menghapus laporan tidak valid ini?')) {
-        if (isSupabaseConfigured) {
-          const { error } = await _supabase.from('penjualan').delete().eq('id', id);
-          if (!error) muatDataArsip();
+      if (!confirm('Apakah Anda yakin ingin menghapus laporan tidak valid ini?')) return;
+      if (isSupabaseConfigured) {
+        const row = dbData.find(x => x.id === id);
+        let error = null;
+        if (row && row.sourceTable === 'sales') {
+          const realId = id.replace(/^sales:/, '');
+          ({ error } = await _supabase.from('sales').delete().eq('id', realId));
+        } else if (row && row.sourceTable === 'penjualan') {
+          const realId = id.replace(/^penjualan:/, '');
+          ({ error } = await _supabase.from('penjualan').delete().eq('id', realId));
         } else {
-          dbData = dbData.filter(item => item.id !== id && item.id != id);
-          localStorage.setItem('arsipPenjualanToko', JSON.stringify(dbData));
-          updateDashboard();
+          ({ error } = await _supabase.from('sales').delete().eq('id', id));
+          if (error) ({ error } = await _supabase.from('penjualan').delete().eq('id', id));
         }
+        if (error) {
+          alert('❌ Gagal menghapus laporan.\n\n' + error.message);
+          return;
+        }
+        await muatDataArsip();
+      } else {
+        dbData = dbData.filter(item => item.id !== id && item.id != id);
+        localStorage.setItem('arsipPenjualanToko', JSON.stringify(dbData));
+        updateDashboard();
       }
     }
 
