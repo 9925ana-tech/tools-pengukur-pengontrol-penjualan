@@ -30,22 +30,22 @@
 
     <!-- Navigasi Tab -->
     <div class="flex border-b border-pink-200">
-      <button onclick="switchTab('karyawan')" id="tab-karyawan" class="py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none">📝 Input Karyawan</button>
+      <button onclick="switchTab('kasir')" id="tab-kasir" class="py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none">📝 Input Karyawan</button>
       <button onclick="switchTab('mod')" id="tab-mod" class="py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none">🔒 Dashboard MOD (Pengontrol Target)</button>
     </div>
 
     <!-- TAB 1: FORM INPUT KASIR -->
-    <div id="sec-karyawan" class="bg-white p-6 rounded-lg shadow-md border-t-4 border-pink-500">
+    <div id="sec-kasir" class="bg-white p-6 rounded-lg shadow-md border-t-4 border-pink-500">
       <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Form Laporan Karyawan Harian</h2>
       <form id="formPenjualan" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Karyawan</label>
-          <input type="text" id="karyawanNama" required placeholder="Masukkan nama karyawan" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
+          <input type="text" id="kasirNama" required placeholder="Masukkan nama karyawan" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
         </div>
 
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Shift</label>
-          <select id="karyawanShift" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
+          <select id="kasirShift" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
             <option value="Shift 1 (Pagi)">Shift 1 (Pagi)</option>
             <option value="Shift 2 (Malam)">Shift 2 (Malam)</option>
           </select>
@@ -53,14 +53,14 @@
 
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Produk Terjual (SKU &amp; Harga Satuan)</label>
-          <select id="karyawanProduk" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 font-semibold bg-pink-50/50 outline-none">
+          <select id="kasirProduk" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 font-semibold bg-pink-50/50 outline-none">
             <!-- Pilihan produk diisi otomatis -->
           </select>
         </div>
 
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Jumlah Terjual (Pcs)</label>
-          <input type="number" id="karyawanQty" min="1" required placeholder="Contoh: 15" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
+          <input type="number" id="kasirQty" min="1" required placeholder="Contoh: 15" class="w-full border border-pink-200 p-2 rounded focus:ring-2 focus:ring-pink-400 outline-none">
         </div>
 
         <div class="md:col-span-2 mt-2">
@@ -121,10 +121,13 @@
         <!-- TARGET PRODUK FOKUS MINGGUAN -->
         <div class="mt-4 border-t border-pink-100 pt-4">
           <h3 class="font-bold text-gray-800 mb-3">📆 Target Produk Fokus Mingguan per Karyawan</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
               <label class="block text-xs font-semibold text-gray-600 mb-1">Produk Fokus</label>
-              <select id="produkFokusMingguan" class="w-full border border-pink-200 p-2 rounded font-bold text-pink-600 bg-white outline-none focus:ring-2 focus:ring-pink-400" onchange="simpanTargetMingguanPerm()"></select>
+              <div class="flex gap-2">
+                <select id="produkFokusMingguan" class="w-full border border-pink-200 p-2 rounded font-bold text-pink-600 bg-white outline-none focus:ring-2 focus:ring-pink-400" onchange="simpanTargetMingguanPerm()"></select>
+                <button type="button" onclick="hapusProdukFokusMingguan()" class="bg-gray-700 hover:bg-gray-800 text-white font-bold px-3 py-2 rounded text-xs whitespace-nowrap">Hapus Fokus</button>
+              </div>
             </div>
             <div>
               <label class="block text-xs font-semibold text-gray-600 mb-1">Target per Karyawan / Minggu (Pcs)</label>
@@ -188,6 +191,11 @@
           </div>
           <span id="statusTargetMingguan" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500">Belum ada data</span>
         </div>
+        <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2 bg-pink-50 p-3 rounded-lg border border-pink-100">
+          <input id="namaTargetKaryawanBaru" type="text" placeholder="Nama karyawan" class="border border-pink-200 rounded p-2 text-sm md:col-span-2">
+          <input id="targetKaryawanBaru" type="number" min="0" value="50" placeholder="Target pcs" class="border border-pink-200 rounded p-2 text-sm">
+          <button type="button" onclick="tambahTargetKaryawanMingguan()" class="bg-pink-500 hover:bg-pink-600 text-white font-bold rounded p-2 text-sm">＋ Tambah Karyawan</button>
+        </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
@@ -197,10 +205,11 @@
                 <th class="p-3 text-right">Terjual</th>
                 <th class="p-3 text-right">Selisih</th>
                 <th class="p-3 text-center">Hasil</th>
+                <th class="p-3 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody id="tabelTargetMingguan" class="text-sm divide-y divide-pink-100">
-              <tr><td colspan="5" class="p-4 text-center text-gray-400">Belum ada data penjualan minggu ini.</td></tr>
+              <tr><td colspan="6" class="p-4 text-center text-gray-400">Belum ada data penjualan minggu ini.</td></tr>
             </tbody>
           </table>
         </div>
@@ -214,7 +223,7 @@
         </div>
         <div class="bg-white p-5 rounded-lg shadow-md border-t-2 border-pink-200">
           <h3 class="font-bold text-gray-700 mb-4 text-center">Performa Karyawan (Pcs)</h3>
-          <canvas id="chartKaryawan"></canvas>
+          <canvas id="chartKasir"></canvas>
         </div>
       </div>
 
@@ -274,16 +283,38 @@
     let catalogProductsList = [];
     let catalogProdukById = {};
     let myChartProduk = null;
-    let myChartKaryawan = null;
+    let myChartKasir = null;
     let debounceTimer = null;
     let debounceMingguanTimer = null;
     let weeklyEmployeeTargets = {};
+    let weeklyEmployeeTargetRows = [];
+    const dirtyFields = new Set();
+    let dashboardFrame = null;
+
+    function markDirty(id) { dirtyFields.add(id); }
+    function clearDirty(id) { dirtyFields.delete(id); }
+    function isDirty(id) { return dirtyFields.has(id); }
+    function preserveScroll(fn) {
+      const y = window.scrollY;
+      const result = fn();
+      requestAnimationFrame(() => window.scrollTo(0, y));
+      return result;
+    }
+    function setupDirtyTracking() {
+      ['inputDaftarProduk','targetPcs','targetOmzet','produkFokusMingguan','targetMingguanPcs'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => markDirty(id));
+        el.addEventListener('change', () => markDirty(id));
+      });
+    }
 
     window.onload = async function() {
       const hariIni = new Date();
       const formatBulan = hariIni.toISOString().slice(0, 7);
       document.getElementById('filterBulan').value = formatBulan;
       document.getElementById('filterMinggu').value = getWeekInputValue(hariIni);
+      setupDirtyTracking();
 
       // Ambil katalog terlebih dahulu, lalu pengaturan MOD dari Supabase.
       // Data terbaru yang disimpan MOD akan menjadi data yang dipakai HP lain.
@@ -302,8 +333,20 @@
     // Realtime + polling/focus refresh. Polling memastikan laporan tetap terbaca
     // walaupun Realtime Supabase belum diaktifkan pada tabel penjualan.
     let syncTimer = null;
+    let realtimeChannel = null;
+    async function refreshCloudData({includeCatalog=true}={}) {
+      const y = window.scrollY;
+      if (includeCatalog) await muatKatalogProduk();
+      await muatTargetCloud();
+      await muatTargetMingguanCloud();
+      await muatTargetKaryawanMingguanCloud();
+      await muatDataArsip();
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    }
+
     function setupRealtimeSubscription() {
-      _supabase
+      if (realtimeChannel) { try { _supabase.removeChannel(realtimeChannel); } catch(e) {} }
+      realtimeChannel = _supabase
         .channel('public-changes-' + Math.random().toString(36).slice(2))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
           muatTargetCloud();
@@ -314,43 +357,17 @@
           await muatKatalogProduk();
           await muatTargetMingguanCloud();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => {
-          muatDataArsip();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'penjualan' }, () => {
-          muatDataArsip();
-        })
-        .subscribe((status) => {
-          console.log('Status sinkronisasi Supabase:', status);
-        });
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => muatDataArsip())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'penjualan' }, () => muatDataArsip())
+        .subscribe(status => console.log('Status sinkronisasi Supabase:', status));
 
-      // Polling cadangan setiap 5 detik. Jadi HP lain tetap mendapatkan
-      // data terbaru walaupun Realtime Supabase belum aktif/terputus.
       clearInterval(syncTimer);
-      syncTimer = setInterval(async () => {
-        await muatKatalogProduk();
-        await muatTargetCloud();
-        await muatTargetMingguanCloud();
-        await muatTargetKaryawanMingguanCloud();
-        await muatDataArsip();
-      }, 5000);
+      syncTimer = setInterval(() => refreshCloudData({includeCatalog:true}), 15000);
 
-      // Saat HP kembali membuka aplikasi/tab, langsung ambil semua data terbaru.
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-          muatKatalogProduk();
-          muatTargetCloud();
-          muatTargetMingguanCloud();
-          muatTargetKaryawanMingguanCloud();
-          muatDataArsip();
-        }
+        if (!document.hidden) refreshCloudData({includeCatalog:true});
       });
-      window.addEventListener('focus', () => {
-        muatKatalogProduk();
-        muatTargetCloud();
-        muatTargetMingguanCloud();
-        muatDataArsip();
-      });
+      window.addEventListener('focus', () => refreshCloudData({includeCatalog:true}));
     }
 
     // 2. SIMPAN TARGET TOTAL PRODUK + OMZET KE public.settings
@@ -371,10 +388,14 @@
             alert('❌ Target belum tersimpan ke Supabase.\n\n' + error.message);
             return;
           }
+          clearDirty('targetPcs');
+          clearDirty('targetOmzet');
           tampilkanNotifTersimpan();
         } else {
           localStorage.setItem('permTargetPcs', String(pcs));
           localStorage.setItem('permTargetOmzet', String(omzet));
+          clearDirty('targetPcs');
+          clearDirty('targetOmzet');
         }
       }, 500);
     }
@@ -401,8 +422,8 @@
           return;
         }
         if (data) {
-          document.getElementById('targetPcs').value = data.target_pcs ?? 0;
-          document.getElementById('targetOmzet').value = data.target_omzet ?? 0;
+          if (!isDirty('targetPcs') && document.activeElement?.id !== 'targetPcs') document.getElementById('targetPcs').value = data.target_pcs ?? 0;
+          if (!isDirty('targetOmzet') && document.activeElement?.id !== 'targetOmzet') document.getElementById('targetOmzet').value = data.target_omzet ?? 0;
         }
       } else {
         const pcsLokal = localStorage.getItem('permTargetPcs');
@@ -536,26 +557,32 @@
     function renderKatalogProduk(products) {
       catalogProduk = {};
       catalogProdukById = {};
-      const selectKaryawan = document.getElementById('karyawanProduk');
+      const selectKasir = document.getElementById('kasirProduk');
       const selectFokus = document.getElementById('produkFokusMingguan');
       const fokusLama = selectFokus ? selectFokus.value : '';
-      if (selectKaryawan) selectKaryawan.innerHTML = '';
-      if (selectFokus) selectFokus.innerHTML = '';
+      if (selectKasir) selectKasir.innerHTML = '';
+      if (selectFokus) {
+        selectFokus.innerHTML = '';
+        const kosong = document.createElement('option');
+        kosong.value = '';
+        kosong.innerText = '— Tidak ada produk fokus —';
+        selectFokus.appendChild(kosong);
+      }
 
       const textValue = products.map(p => `${p.name}:${Number(p.price) || 0}`).join(', ');
       const input = document.getElementById('inputDaftarProduk');
-      if (input && products.length) input.value = textValue;
+      if (input && products.length && !isDirty('inputDaftarProduk') && document.activeElement?.id !== 'inputDaftarProduk') input.value = textValue;
 
       products.forEach(p => {
         const harga = Number(p.price) || 0;
         catalogProduk[p.name] = harga;
         catalogProdukById[p.id] = { id: p.id, name: p.name, price: harga };
 
-        if (selectKaryawan) {
+        if (selectKasir) {
           const option = document.createElement('option');
           option.value = p.name;
           option.innerText = `${p.name} (Rp ${harga.toLocaleString('id-ID')})`;
-          selectKaryawan.appendChild(option);
+          selectKasir.appendChild(option);
         }
 
         if (selectFokus) {
@@ -568,120 +595,173 @@
 
       if (selectFokus && fokusLama && [...selectFokus.options].some(o => o.value === fokusLama)) {
         selectFokus.value = fokusLama;
-      } else if (selectFokus && selectFokus.options.length) {
-        selectFokus.selectedIndex = 0;
+      } else if (selectFokus) {
+        selectFokus.value = '';
       }
-      updateDashboard();
+      preserveScroll(() => updateDashboard());
     }
 
-    // 3B. TARGET PRODUK FOKUS MINGGUAN PER KASIR
+    // 3B. TARGET PRODUK FOKUS MINGGUAN PER KARYAWAN
     async function simpanTargetMingguanPerm() {
-      updateDashboard();
+      preserveScroll(() => updateDashboard());
       clearTimeout(debounceMingguanTimer);
       debounceMingguanTimer = setTimeout(async () => {
-        const productId = document.getElementById('produkFokusMingguan').value;
+        const productId = document.getElementById('produkFokusMingguan').value || null;
         const target = Math.max(0, parseInt(document.getElementById('targetMingguanPcs').value, 10) || 0);
-        if (!productId) return;
 
         if (isSupabaseConfigured) {
-          const { error } = await _supabase
-            .from('settings')
-            .upsert({ id: 1, weekly_focus_product_id: productId, weekly_target_pcs: target }, { onConflict: 'id' });
-
+          const { error } = await _supabase.from('settings').upsert({
+            id: 1,
+            weekly_focus_product_id: productId,
+            weekly_target_pcs: productId ? target : 0
+          }, { onConflict: 'id' });
           if (error) {
             console.error('Gagal simpan target mingguan:', error);
             alert('❌ Target mingguan belum tersimpan.\n\n' + error.message);
             return;
           }
+          clearDirty('produkFokusMingguan');
+          clearDirty('targetMingguanPcs');
+          await muatTargetKaryawanMingguanCloud();
           tampilkanNotifTersimpan();
         } else {
-          localStorage.setItem('permProdukFokusMingguan', productId);
-          localStorage.setItem('permTargetMingguanPcs', String(target));
+          localStorage.setItem('permProdukFokusMingguan', productId || '');
+          localStorage.setItem('permTargetMingguanPcs', String(productId ? target : 0));
+          clearDirty('produkFokusMingguan');
+          clearDirty('targetMingguanPcs');
         }
-        updateDashboard();
+        preserveScroll(() => updateDashboard());
       }, 500);
+    }
+
+    async function hapusProdukFokusMingguan() {
+      clearTimeout(debounceMingguanTimer);
+      const select = document.getElementById('produkFokusMingguan');
+      select.value = '';
+      document.getElementById('targetMingguanPcs').value = 0;
+      if (isSupabaseConfigured) {
+        const { error } = await _supabase.from('settings').upsert({
+          id: 1, weekly_focus_product_id: null, weekly_target_pcs: 0
+        }, { onConflict: 'id' });
+        if (error) {
+          alert('❌ Fokus mingguan belum terhapus.\n\n' + error.message);
+          return;
+        }
+      } else {
+        localStorage.removeItem('permProdukFokusMingguan');
+        localStorage.setItem('permTargetMingguanPcs', '0');
+      }
+      clearDirty('produkFokusMingguan');
+      clearDirty('targetMingguanPcs');
+      await muatTargetKaryawanMingguanCloud();
+      preserveScroll(() => updateDashboard());
+      tampilkanNotifTersimpan();
     }
 
     async function muatTargetMingguanCloud() {
       if (isSupabaseConfigured) {
-        const { data, error } = await _supabase
-          .from('settings')
-          .select('weekly_focus_product_id, weekly_target_pcs')
-          .eq('id', 1)
-          .maybeSingle();
-
-        if (error) {
-          console.error('Gagal membaca target mingguan:', error);
-          return;
-        }
+        const { data, error } = await _supabase.from('settings')
+          .select('weekly_focus_product_id, weekly_target_pcs').eq('id', 1).maybeSingle();
+        if (error) { console.error('Gagal membaca target mingguan:', error); return; }
         if (data) {
           const selectFokus = document.getElementById('produkFokusMingguan');
-          if (selectFokus && data.weekly_focus_product_id) selectFokus.value = data.weekly_focus_product_id;
-          if (data.weekly_target_pcs !== null && data.weekly_target_pcs !== undefined) {
-            document.getElementById('targetMingguanPcs').value = data.weekly_target_pcs;
+          if (selectFokus && !isDirty('produkFokusMingguan') && document.activeElement?.id !== 'produkFokusMingguan') {
+            const wanted = data.weekly_focus_product_id || '';
+            selectFokus.value = [...selectFokus.options].some(o => o.value === wanted) ? wanted : '';
+          }
+          if (!isDirty('targetMingguanPcs') && document.activeElement?.id !== 'targetMingguanPcs') {
+            document.getElementById('targetMingguanPcs').value = data.weekly_target_pcs ?? 0;
           }
         }
       } else {
         const produk = localStorage.getItem('permProdukFokusMingguan');
         const target = localStorage.getItem('permTargetMingguanPcs');
-        if (produk) document.getElementById('produkFokusMingguan').value = produk;
-        if (target) document.getElementById('targetMingguanPcs').value = target;
+        if (produk && !isDirty('produkFokusMingguan')) document.getElementById('produkFokusMingguan').value = produk;
+        if (target !== null && !isDirty('targetMingguanPcs')) document.getElementById('targetMingguanPcs').value = target;
       }
-      updateDashboard();
+      preserveScroll(() => updateDashboard());
     }
 
     async function muatTargetKaryawanMingguanCloud() {
       const week = document.getElementById('filterMinggu')?.value;
       const productId = document.getElementById('produkFokusMingguan')?.value;
       weeklyEmployeeTargets = {};
-      if (!week || !productId) return;
+      weeklyEmployeeTargetRows = [];
+      if (!week || !productId) { updateTargetMingguan(); return; }
 
       if (isSupabaseConfigured) {
-        const { data, error } = await _supabase
-          .from('employee_weekly_targets')
-          .select('employee_name, week_key, product_id, target_pcs')
-          .eq('week_key', week)
-          .eq('product_id', productId);
-        if (error) {
-          console.warn('Target karyawan mingguan belum tersedia:', error.message);
-          return;
-        }
-        (data || []).forEach(row => {
+        const { data, error } = await _supabase.from('employee_weekly_targets')
+          .select('employee_name, week_key, product_id, target_pcs, updated_at')
+          .eq('week_key', week).eq('product_id', productId);
+        if (error) { console.warn('Target karyawan mingguan belum tersedia:', error.message); return; }
+        weeklyEmployeeTargetRows = data || [];
+        weeklyEmployeeTargetRows.forEach(row => {
           weeklyEmployeeTargets[String(row.employee_name).trim().toLowerCase()] = Number(row.target_pcs) || 0;
         });
+      } else {
+        const saved = JSON.parse(localStorage.getItem('permTargetKaryawanMingguan') || '{}');
+        weeklyEmployeeTargets = saved;
+        weeklyEmployeeTargetRows = Object.keys(saved).map(name => ({employee_name:name, target_pcs:saved[name]}));
       }
       updateTargetMingguan();
     }
 
-    async function simpanTargetKaryawanMingguan(nama, target) {
+    async function simpanTargetKaryawanMingguan(oldName, newName, target) {
       const week = document.getElementById('filterMinggu')?.value;
       const productId = document.getElementById('produkFokusMingguan')?.value;
-      const employeeName = String(nama || '').trim();
+      const employeeName = String(newName || '').trim();
+      const oldEmployeeName = String(oldName || '').trim();
       const value = Math.max(0, parseInt(target, 10) || 0);
-      if (!week || !productId || !employeeName) return;
-
-      weeklyEmployeeTargets[employeeName.toLowerCase()] = value;
-      updateTargetMingguan();
+      if (!week || !productId || !employeeName) { alert('⚠️ Pilih produk fokus dan isi nama karyawan.'); return; }
 
       if (isSupabaseConfigured) {
-        const { error } = await _supabase
-          .from('employee_weekly_targets')
-          .upsert({
-            employee_name: employeeName,
-            week_key: week,
-            product_id: productId,
-            target_pcs: value,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'employee_name,week_key,product_id' });
-        if (error) {
-          console.error('Gagal simpan target karyawan mingguan:', error);
-          alert('❌ Target karyawan belum tersimpan.\n\n' + error.message);
-          return;
+        if (oldEmployeeName && oldEmployeeName.toLowerCase() !== employeeName.toLowerCase()) {
+          const del = await _supabase.from('employee_weekly_targets').delete()
+            .eq('employee_name', oldEmployeeName).eq('week_key', week).eq('product_id', productId);
+          if (del.error) { alert('❌ Nama lama belum bisa diubah.\n\n' + del.error.message); return; }
         }
+        const existing = await _supabase.from('employee_weekly_targets').select('employee_name')
+          .eq('employee_name', employeeName).eq('week_key', week).eq('product_id', productId).maybeSingle();
+        let result;
+        if (existing.data) {
+          result = await _supabase.from('employee_weekly_targets').update({target_pcs:value, updated_at:new Date().toISOString()})
+            .eq('employee_name', employeeName).eq('week_key', week).eq('product_id', productId);
+        } else {
+          result = await _supabase.from('employee_weekly_targets').insert([{employee_name:employeeName, week_key:week, product_id:productId, target_pcs:value}]);
+        }
+        if (result.error) { alert('❌ Target karyawan belum tersimpan.\n\n' + result.error.message); return; }
         tampilkanNotifTersimpan();
       } else {
+        if (oldEmployeeName) delete weeklyEmployeeTargets[oldEmployeeName.toLowerCase()];
+        weeklyEmployeeTargets[employeeName.toLowerCase()] = value;
         localStorage.setItem('permTargetKaryawanMingguan', JSON.stringify(weeklyEmployeeTargets));
       }
+      await muatTargetKaryawanMingguanCloud();
+    }
+
+    async function tambahTargetKaryawanMingguan() {
+      const nama = document.getElementById('namaTargetKaryawanBaru').value.trim();
+      const target = document.getElementById('targetKaryawanBaru').value;
+      await simpanTargetKaryawanMingguan('', nama, target);
+      document.getElementById('namaTargetKaryawanBaru').value = '';
+      document.getElementById('targetKaryawanBaru').value = document.getElementById('targetMingguanPcs').value || 0;
+    }
+
+    async function hapusTargetKaryawanMingguan(nama) {
+      const week = document.getElementById('filterMinggu')?.value;
+      const productId = document.getElementById('produkFokusMingguan')?.value;
+      if (!week || !productId || !nama) return;
+      if (!confirm('Hapus target mingguan karyawan ini? Data penjualan historis tidak akan dihapus.')) return;
+      if (isSupabaseConfigured) {
+        const { error } = await _supabase.from('employee_weekly_targets').delete()
+          .eq('employee_name', nama).eq('week_key', week).eq('product_id', productId);
+        if (error) { alert('❌ Target karyawan belum terhapus.\n\n' + error.message); return; }
+      } else {
+        delete weeklyEmployeeTargets[String(nama).toLowerCase()];
+        localStorage.setItem('permTargetKaryawanMingguan', JSON.stringify(weeklyEmployeeTargets));
+      }
+      await muatTargetKaryawanMingguanCloud();
+      tampilkanNotifTersimpan();
     }
 
     function getWeekInputValue(date) {
@@ -727,7 +807,6 @@
     function updateTargetMingguan() {
       const tbody = document.getElementById('tabelTargetMingguan');
       if (!tbody) return;
-
       const range = getWeekRange(document.getElementById('filterMinggu').value);
       const weekValue = document.getElementById('filterMinggu').value;
       const productId = document.getElementById('produkFokusMingguan').value;
@@ -738,33 +817,27 @@
       const productName = product ? product.name : '';
 
       if (!range || !productId || !productName) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">Pilih produk fokus dan minggu terlebih dahulu.</td></tr>';
-        label.innerText = '-';
-        status.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500';
-        status.innerText = 'Belum ada data';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">Pilih produk fokus dan minggu terlebih dahulu.</td></tr>';
+        label.innerText = '-'; status.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500'; status.innerText = 'Belum ada data';
         return;
       }
 
       const weekly = dbData.filter(row => {
-        const sameProduct = row.productId
-          ? String(row.productId) === String(productId)
-          : String(row.produk || '').trim().toLowerCase() === productName.trim().toLowerCase();
+        const sameProduct = row.productId ? String(row.productId) === String(productId) : String(row.produk || '').trim().toLowerCase() === productName.trim().toLowerCase();
         return sameProduct && isRowInSelectedWeek(row, range);
       });
-
       const perKaryawan = {};
-      weekly.forEach(row => {
-        const nama = row.karyawan || 'Tanpa Nama';
-        perKaryawan[nama] = (perKaryawan[nama] || 0) + (parseInt(row.qty, 10) || 0);
-      });
+      weekly.forEach(row => { const nama = row.kasir || 'Tanpa Nama'; perKaryawan[nama] = (perKaryawan[nama] || 0) + (parseInt(row.qty, 10) || 0); });
 
-      const karyawanNames = [...new Set(dbData.map(row => row.karyawan).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-      label.innerText = `${productName} • Target dapat diatur per karyawan • ${weekValue}`;
+      const names = new Map();
+      weeklyEmployeeTargetRows.forEach(row => { if (row.employee_name) names.set(String(row.employee_name).trim().toLowerCase(), String(row.employee_name).trim()); });
+      Object.keys(perKaryawan).forEach(n => names.set(String(n).trim().toLowerCase(), n));
+      const karyawanNames = [...names.values()].sort((a,b) => a.localeCompare(b));
+      label.innerText = `${productName} • ${weekValue}`;
 
       if (karyawanNames.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">Belum ada data karyawan.</td></tr>';
-        status.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500';
-        status.innerText = 'Belum ada data';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">Belum ada karyawan untuk target minggu ini. Tambahkan karyawan di atas.</td></tr>';
+        status.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500'; status.innerText = 'Belum ada data';
         return;
       }
 
@@ -772,26 +845,27 @@
       tbody.innerHTML = karyawanNames.map(nama => {
         const terjual = perKaryawan[nama] || 0;
         const key = String(nama).trim().toLowerCase();
-        const target = Object.prototype.hasOwnProperty.call(weeklyEmployeeTargets, key)
-          ? weeklyEmployeeTargets[key]
-          : defaultTarget;
+        const target = Object.prototype.hasOwnProperty.call(weeklyEmployeeTargets, key) ? weeklyEmployeeTargets[key] : defaultTarget;
         const selisih = terjual - target;
         const ok = selisih >= 0;
         if (ok) tercapai++;
+        const safe = encodeURIComponent(String(nama));
         return `<tr class="hover:bg-pink-50/50">
-          <td class="p-3 font-semibold text-gray-700">${nama}</td>
-          <td class="p-3 text-right">
-            <input type="number" min="0" value="${target}" class="w-24 border border-pink-200 rounded p-1 text-right font-bold text-pink-600" onchange="simpanTargetKaryawanMingguan(${JSON.stringify(nama)}, this.value)">
-          </td>
+          <td class="p-2"><input type="text" value="${escapeHtml(nama)}" id="name-${encodeURIComponent(key)}" class="w-full min-w-[150px] border border-pink-200 rounded p-1 font-semibold text-gray-700"></td>
+          <td class="p-2 text-right"><input type="number" min="0" value="${target}" id="target-${encodeURIComponent(key)}" class="w-24 border border-pink-200 rounded p-1 text-right font-bold text-pink-600"></td>
           <td class="p-3 text-right font-bold text-pink-600">${terjual} Pcs</td>
           <td class="p-3 text-right font-bold ${ok ? 'text-emerald-600' : 'text-rose-600'}">${selisih > 0 ? '+' : ''}${selisih} Pcs</td>
           <td class="p-3 text-center"><span class="px-2 py-1 rounded text-xs font-bold ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">${ok ? '✓ TARGET TERCAPAI' : `MINUS ${Math.abs(selisih)} Pcs`}</span></td>
+          <td class="p-2 text-center whitespace-nowrap"><button type="button" onclick="simpanTargetKaryawanMingguan(decodeURIComponent('${safe}'), document.getElementById('name-${encodeURIComponent(key)}').value, document.getElementById('target-${encodeURIComponent(key)}').value)" class="bg-pink-500 hover:bg-pink-600 text-white px-2 py-1 rounded text-xs font-bold">Simpan</button> <button type="button" onclick="hapusTargetKaryawanMingguan(decodeURIComponent('${safe}'))" class="bg-gray-700 hover:bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold">Hapus</button></td>
         </tr>`;
       }).join('');
-
       const semuaTercapai = tercapai === karyawanNames.length;
       status.className = `px-3 py-1 rounded-full text-xs font-bold ${semuaTercapai ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`;
       status.innerText = `${tercapai}/${karyawanNames.length} karyawan mencapai target`;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));
     }
 
     // 4. KASIR INPUT PENJUALAN
@@ -800,14 +874,14 @@
 
       const form = this;
       const tombol = form.querySelector('button[type="submit"]');
-      const namaKaryawan = document.getElementById('karyawanNama').value.trim();
-      const prodSelected = document.getElementById('karyawanProduk').value;
-      const qty = parseInt(document.getElementById('karyawanQty').value, 10);
+      const namaKasir = document.getElementById('kasirNama').value.trim();
+      const prodSelected = document.getElementById('kasirProduk').value;
+      const qty = parseInt(document.getElementById('kasirQty').value, 10);
       const hargaSatuan = Number(catalogProduk[prodSelected]) || 0;
 
       // Validasi sebelum dikirim
-      if (!namaKaryawan) {
-        alert('⚠️ Nama karyawan wajib diisi.');
+      if (!namaKasir) {
+        alert('⚠️ Nama kasir wajib diisi.');
         return;
       }
 
@@ -836,8 +910,8 @@
       const item = {
         bulan_key: bulanKey,
         waktu: `${tglString} ${jamString}`,
-        karyawan: namaKaryawan,
-        shift: document.getElementById('karyawanShift').value,
+        kasir: namaKasir,
+        shift: document.getElementById('kasirShift').value,
         produk: prodSelected,
         harga_satuan: hargaSatuan,
         qty: qty,
@@ -852,8 +926,8 @@
         if (isSupabaseConfigured && _supabase) {
           const productRow = Object.values(catalogProdukById).find(p => p.name === prodSelected);
           const salesRow = {
-            cashier_name: namaKaryawan,
-            shift: document.getElementById('karyawanShift').value,
+            cashier_name: namaKasir,
+            shift: document.getElementById('kasirShift').value,
             product_id: productRow ? productRow.id : null,
             product_name: prodSelected,
             unit_price: hargaSatuan,
@@ -920,7 +994,7 @@
             sourceTable: 'sales',
             bulanKey: item.sold_at ? new Date(item.sold_at).toISOString().slice(0,7) : '',
             waktu: item.sold_at ? new Date(item.sold_at).toLocaleString('id-ID') : '',
-            karyawan: item.cashier_name || 'Tanpa Nama',
+            kasir: item.cashier_name || 'Tanpa Nama',
             shift: item.shift || '-',
             produk: item.product_name || '-',
             productId: item.product_id || null,
@@ -939,7 +1013,7 @@
             sourceTable: 'penjualan',
             bulanKey: item.bulan_key,
             waktu: item.waktu,
-            karyawan: item.karyawan,
+            kasir: item.kasir,
             shift: item.shift,
             produk: item.produk,
             productId: null,
@@ -1008,20 +1082,20 @@
       isModLoggedIn = false;
       document.getElementById('modPass').value = '';
       document.getElementById('statusModLogin').classList.add('hidden');
-      switchTab('karyawan');
+      switchTab('kasir');
     }
 
     function switchTab(tab) {
-      if(tab === 'karyawan') {
-        document.getElementById('sec-karyawan').classList.remove('hidden');
+      if(tab === 'kasir') {
+        document.getElementById('sec-kasir').classList.remove('hidden');
         document.getElementById('sec-mod-login').classList.add('hidden');
         document.getElementById('sec-mod-content').classList.add('hidden');
-        document.getElementById('tab-karyawan').className = "py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none";
+        document.getElementById('tab-kasir').className = "py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none";
         document.getElementById('tab-mod').className = "py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none";
       } else {
-        document.getElementById('sec-karyawan').classList.add('hidden');
+        document.getElementById('sec-kasir').classList.add('hidden');
         document.getElementById('tab-mod').className = "py-2 px-6 font-bold text-pink-600 border-b-2 border-pink-600 focus:outline-none";
-        document.getElementById('tab-karyawan').className = "py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none";
+        document.getElementById('tab-kasir').className = "py-2 px-6 font-bold text-gray-500 hover:text-pink-600 focus:outline-none";
 
         if (isModLoggedIn) {
           document.getElementById('sec-mod-content').classList.remove('hidden');
@@ -1036,6 +1110,7 @@
 
     function updateDashboard() {
       if (!isModLoggedIn) return;
+      const savedScrollY = window.scrollY;
 
       const targetPcs = Math.max(0, parseInt(document.getElementById('targetPcs').value, 10) || 0);
       const targetOmzet = Math.max(0, Number(document.getElementById('targetOmzet').value) || 0);
@@ -1046,7 +1121,7 @@
       let totalPcs = 0;
       let totalOmzet = 0;
       let rekapProduk = {};
-      let rekapKaryawan = {};
+      let rekapKasir = {};
 
       const tbody = document.getElementById('tabelLaporan');
       tbody.innerHTML = '';
@@ -1061,12 +1136,12 @@
           totalOmzet += row.totalOmzet;
 
           rekapProduk[row.produk] = (rekapProduk[row.produk] || 0) + row.qty;
-          rekapKaryawan[row.karyawan] = (rekapKaryawan[row.karyawan] || 0) + row.qty;
+          rekapKasir[row.kasir] = (rekapKasir[row.kasir] || 0) + row.qty;
 
           tbody.innerHTML += `
             <tr class="hover:bg-pink-50/50">
               <td class="p-3 font-semibold text-gray-600">${row.waktu}</td>
-              <td class="p-3 font-semibold">${row.karyawan}</td>
+              <td class="p-3 font-semibold">${row.kasir}</td>
               <td class="p-3">${row.shift}</td>
               <td class="p-3">${row.produk}</td>
               <td class="p-3 text-right">Rp ${row.hargaSatuan.toLocaleString('id-ID')}</td>
@@ -1091,36 +1166,30 @@
       document.getElementById('barOmzet').style.width = `${pctOmzet}%`;
       document.getElementById('pctOmzet').innerText = `${pctOmzet}% Terpadu`;
 
-      renderCharts(rekapProduk, rekapKaryawan);
+      renderCharts(rekapProduk, rekapKasir);
       updateTargetMingguan();
+      requestAnimationFrame(() => window.scrollTo(0, savedScrollY));
     }
 
     function renderCharts(produkData, karyawanData) {
-      const pinkPalette = ['#ec4899', '#f43f5e', '#fb7185', '#f472b6', '#e879f9'];
-
+      const labelsProduk = Object.keys(produkData);
+      const dataProduk = Object.values(produkData);
       const ctx1 = document.getElementById('chartProduk').getContext('2d');
-      if(myChartProduk) myChartProduk.destroy();
-      myChartProduk = new Chart(ctx1, {
-        type: 'doughnut',
-        data: {
-          labels: Object.keys(produkData).length > 0 ? Object.keys(produkData) : ['Belum Ada Data'],
-          datasets: [{ 
-            data: Object.values(produkData).length > 0 ? Object.values(produkData) : [1], 
-            backgroundColor: Object.values(produkData).length > 0 ? pinkPalette : ['#fbcfe8'] 
-          }]
-        }
-      });
+      if (!myChartProduk) {
+        myChartProduk = new Chart(ctx1, { type:'doughnut', data:{labels:[],datasets:[{data:[],backgroundColor:['#ec4899','#f43f5e','#fb7185','#f472b6','#e879f9']}]}, options:{responsive:true} });
+      }
+      myChartProduk.data.labels = labelsProduk.length ? labelsProduk : ['Belum Ada Data'];
+      myChartProduk.data.datasets[0].data = dataProduk.length ? dataProduk : [1];
+      myChartProduk.update('none');
 
-      const ctx2 = document.getElementById('chartKaryawan').getContext('2d');
-      if(myChartKaryawan) myChartKaryawan.destroy();
-      myChartKaryawan = new Chart(ctx2, {
-        type: 'bar',
-        data: {
-          labels: Object.keys(karyawanData),
-          datasets: [{ label: 'Pcs Terjual', data: Object.values(karyawanData), backgroundColor: '#ec4899' }]
-        },
-        options: { scales: { y: { beginAtZero: true } } }
-      });
+      const labelsKaryawan = Object.keys(karyawanData);
+      const ctx2 = document.getElementById('chartKasir').getContext('2d');
+      if (!myChartKasir) {
+        myChartKasir = new Chart(ctx2, { type:'bar', data:{labels:[],datasets:[{label:'Pcs Terjual',data:[],backgroundColor:'#ec4899'}]}, options:{responsive:true,scales:{y:{beginAtZero:true}}} });
+      }
+      myChartKasir.data.labels = labelsKaryawan.length ? labelsKaryawan : ['Belum Ada Data'];
+      myChartKasir.data.datasets[0].data = labelsKaryawan.length ? Object.values(karyawanData) : [0];
+      myChartKasir.update('none');
     }
   </script>
 </body>
