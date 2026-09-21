@@ -301,25 +301,13 @@
     function setupRealtimeSubscription() {
       _supabase
         .channel('public-changes-' + Math.random().toString(36).slice(2))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'app_config' }, payload => {
-          if (payload.new && payload.new.key === 'targetPcs') {
-            document.getElementById('targetPcs').value = payload.new.value;
-          }
-          if (payload.new && payload.new.key === 'targetOmzet') {
-            document.getElementById('targetOmzet').value = payload.new.value;
-          }
-          if (payload.new && payload.new.key === 'daftarProduk') {
-            document.getElementById('inputDaftarProduk').value = payload.new.value;
-            simpanDaftarProduk();
-          }
-          if (payload.new && payload.new.key === 'produkFokusMingguan') {
-            document.getElementById('produkFokusMingguan').value = payload.new.value;
-          }
-          if (payload.new && payload.new.key === 'targetMingguanPcs') {
-            document.getElementById('targetMingguanPcs').value = payload.new.value;
-          }
-          updateDashboard();
-          updateTargetMingguan();
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
+          muatTargetCloud();
+          muatTargetMingguanCloud();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, async () => {
+          await muatKatalogProduk();
+          await muatTargetMingguanCloud();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'penjualan' }, () => {
           muatDataArsip();
@@ -328,37 +316,55 @@
           console.log('Status sinkronisasi Supabase:', status);
         });
 
-      // Ambil ulang data penjualan berkala agar semua HP selalu membaca
-      // data yang benar-benar tersimpan di database.
+      // Polling cadangan setiap 5 detik. Jadi HP lain tetap mendapatkan
+      // data terbaru walaupun Realtime Supabase belum aktif/terputus.
       clearInterval(syncTimer);
-      syncTimer = setInterval(() => {
-        muatDataArsip();
+      syncTimer = setInterval(async () => {
+        await muatKatalogProduk();
+        await muatTargetCloud();
+        await muatTargetMingguanCloud();
+        await muatDataArsip();
       }, 5000);
 
-      // Saat HP kembali membuka aplikasi/tab, langsung ambil data terbaru.
+      // Saat HP kembali membuka aplikasi/tab, langsung ambil semua data terbaru.
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) muatDataArsip();
+        if (!document.hidden) {
+          muatKatalogProduk();
+          muatTargetCloud();
+          muatTargetMingguanCloud();
+          muatDataArsip();
+        }
       });
-      window.addEventListener('focus', () => muatDataArsip());
+      window.addEventListener('focus', () => {
+        muatKatalogProduk();
+        muatTargetCloud();
+        muatTargetMingguanCloud();
+        muatDataArsip();
+      });
     }
 
-    // 2. SIMPAN TARGET OTOMATIS KE SUPABASE SAAT KETIK
+    // 2. SIMPAN TARGET TOTAL PRODUK + OMZET KE public.settings
     function simpanTargetPerm() {
       updateDashboard();
-
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(async () => {
-        const pcs = document.getElementById('targetPcs').value;
-        const omzet = document.getElementById('targetOmzet').value;
+        const pcs = Math.max(0, parseInt(document.getElementById('targetPcs').value, 10) || 0);
+        const omzet = Math.max(0, Number(document.getElementById('targetOmzet').value) || 0);
 
         if (isSupabaseConfigured) {
-          await _supabase.from('app_config').upsert({ key: 'targetPcs', value: String(pcs) }, { onConflict: 'key' });
-          await _supabase.from('app_config').upsert({ key: 'targetOmzet', value: String(omzet) }, { onConflict: 'key' });
-          
+          const { error } = await _supabase
+            .from('settings')
+            .upsert({ id: 1, target_pcs: pcs, target_omzet: omzet }, { onConflict: 'id' });
+
+          if (error) {
+            console.error('Gagal menyimpan target:', error);
+            alert('❌ Target belum tersimpan ke Supabase.\n\n' + error.message);
+            return;
+          }
           tampilkanNotifTersimpan();
         } else {
-          localStorage.setItem('permTargetPcs', pcs);
-          localStorage.setItem('permTargetOmzet', omzet);
+          localStorage.setItem('permTargetPcs', String(pcs));
+          localStorage.setItem('permTargetOmzet', String(omzet));
         }
       }, 500);
     }
@@ -371,90 +377,190 @@
       }
     }
 
+    // Selalu ambil target terbaru dari Supabase. Tidak memakai app_config.
     async function muatTargetCloud() {
       if (isSupabaseConfigured) {
-        const { data: dataPcs } = await _supabase.from('app_config').select('value').eq('key', 'targetPcs').maybeSingle();
-        const { data: dataOmzet } = await _supabase.from('app_config').select('value').eq('key', 'targetOmzet').maybeSingle();
+        const { data, error } = await _supabase
+          .from('settings')
+          .select('target_pcs, target_omzet')
+          .eq('id', 1)
+          .maybeSingle();
 
-        if (dataPcs && dataPcs.value) document.getElementById('targetPcs').value = dataPcs.value;
-        if (dataOmzet && dataOmzet.value) document.getElementById('targetOmzet').value = dataOmzet.value;
+        if (error) {
+          console.error('Gagal membaca settings:', error);
+          return;
+        }
+        if (data) {
+          document.getElementById('targetPcs').value = data.target_pcs ?? 0;
+          document.getElementById('targetOmzet').value = data.target_omzet ?? 0;
+        }
       } else {
         const pcsLokal = localStorage.getItem('permTargetPcs');
         const omzetLokal = localStorage.getItem('permTargetOmzet');
-        if (pcsLokal) document.getElementById('targetPcs').value = pcsLokal;
-        if (omzetLokal) document.getElementById('targetOmzet').value = omzetLokal;
+        if (pcsLokal !== null) document.getElementById('targetPcs').value = pcsLokal;
+        if (omzetLokal !== null) document.getElementById('targetOmzet').value = omzetLokal;
       }
       updateDashboard();
     }
 
-    // 3. PENGATURAN KATALOG PRODUK
+    // 3. KATALOG PRODUK -> public.products
+    function parseKatalogInput() {
+      const inputStr = document.getElementById('inputDaftarProduk').value || '';
+      return inputStr
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map(item => {
+          const colonIndex = item.lastIndexOf(':');
+          let nama = colonIndex > 0 ? item.slice(0, colonIndex).trim() : item.trim();
+          let harga = colonIndex > 0 ? Number(item.slice(colonIndex + 1).replace(/[^0-9]/g, '')) || 0 : 0;
+          return { name: nama, price: harga };
+        })
+        .filter(p => p.name);
+    }
+
+    function parseHargaProduk(item) {
+      const colonIndex = item.lastIndexOf(':');
+      if (colonIndex > 0) return Number(item.slice(colonIndex + 1).replace(/[^0-9]/g, '')) || 0;
+      const parenMatch = item.match(/^(.*)\((\d+(?:[.,]\d+)?)\)$/);
+      return parenMatch ? Number(parenMatch[2].replace(/[^0-9]/g, '')) || 0 : 0;
+    }
+
     async function simpanDaftarProdukPerm() {
-      const val = document.getElementById('inputDaftarProduk').value;
-      if (isSupabaseConfigured) {
-        const { error } = await _supabase.from('app_config').upsert({ key: 'daftarProduk', value: val }, { onConflict: 'key' });
-        if (error) console.error("Gagal simpan produk:", error);
-        else tampilkanNotifTersimpan();
-      } else {
-        localStorage.setItem('permDaftarProduk', val);
+      const daftarBaru = parseKatalogInput();
+      if (!daftarBaru.length) {
+        alert('❌ Katalog produk tidak boleh kosong.');
+        return;
       }
-      simpanDaftarProduk();
+
+      if (isSupabaseConfigured) {
+        // Ambil daftar lama agar perubahan nama tetap meng-update baris produk lama.
+        const { data: lama, error: readError } = await _supabase
+          .from('products')
+          .select('id, name, price, active')
+          .order('created_at', { ascending: true });
+
+        if (readError) {
+          console.error('Gagal membaca katalog:', readError);
+          alert('❌ Katalog belum bisa dibaca dari Supabase.\n\n' + readError.message);
+          return;
+        }
+
+        const oldList = lama || [];
+        const usedIds = new Set();
+        const updates = [];
+        const inserts = [];
+
+        daftarBaru.forEach((p, index) => {
+          const sameName = oldList.find(x => !usedIds.has(x.id) && String(x.name).toLowerCase() === p.name.toLowerCase());
+          const samePosition = oldList[index] && !usedIds.has(oldList[index].id) ? oldList[index] : null;
+          const existing = sameName || (oldList.length === daftarBaru.length ? samePosition : null);
+
+          if (existing) {
+            usedIds.add(existing.id);
+            updates.push({ id: existing.id, name: p.name, price: p.price, active: true });
+          } else {
+            inserts.push({ name: p.name, price: p.price, active: true });
+          }
+        });
+
+        for (const row of updates) {
+          const { error } = await _supabase.from('products').update({ name: row.name, price: row.price, active: true }).eq('id', row.id);
+          if (error) {
+            console.error('Gagal update produk:', error);
+            alert('❌ Gagal menyimpan produk "' + row.name + '":\n\n' + error.message);
+            return;
+          }
+        }
+
+        if (inserts.length) {
+          const { error } = await _supabase.from('products').insert(inserts);
+          if (error) {
+            console.error('Gagal menambah produk:', error);
+            alert('❌ Gagal menambah produk baru:\n\n' + error.message);
+            return;
+          }
+        }
+
+        const idsYangDipakai = new Set([...updates.map(x => x.id)]);
+        const idsLamaYangDihapus = oldList.filter(x => !idsYangDipakai.has(x.id) && !daftarBaru.some(p => p.name.toLowerCase() === String(x.name).toLowerCase())).map(x => x.id);
+        if (idsLamaYangDihapus.length) {
+          const { error } = await _supabase.from('products').update({ active: false }).in('id', idsLamaYangDihapus);
+          if (error) {
+            console.error('Gagal menonaktifkan produk lama:', error);
+            alert('⚠️ Produk tersimpan, tetapi produk lama gagal dinonaktifkan: ' + error.message);
+          }
+        }
+
+        await muatKatalogProduk();
+        tampilkanNotifTersimpan();
+      } else {
+        localStorage.setItem('permDaftarProduk', document.getElementById('inputDaftarProduk').value);
+        simpanDaftarProduk();
+      }
     }
 
     async function muatKatalogProduk() {
       if (isSupabaseConfigured) {
-        const { data } = await _supabase.from('app_config').select('value').eq('key', 'daftarProduk').maybeSingle();
-        if (data && data.value) document.getElementById('inputDaftarProduk').value = data.value;
+        const { data, error } = await _supabase
+          .from('products')
+          .select('id, name, price, active')
+          .eq('active', true)
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Gagal membaca products:', error);
+          return;
+        }
+        catalogProductsList = data || [];
+        renderKatalogProduk(catalogProductsList);
       } else {
         const tersimpan = localStorage.getItem('permDaftarProduk');
         if (tersimpan) document.getElementById('inputDaftarProduk').value = tersimpan;
+        const fallback = parseKatalogInput();
+        catalogProductsList = fallback.map((p, i) => ({ id: 'local-' + i, name: p.name, price: p.price, active: true }));
+        renderKatalogProduk(catalogProductsList);
       }
-      simpanDaftarProduk();
     }
 
-    function simpanDaftarProduk() {
-      const inputStr = document.getElementById('inputDaftarProduk').value;
-      const items = inputStr.split(',').map(item => item.trim()).filter(item => item !== '');
-      
+    function renderKatalogProduk(products) {
       catalogProduk = {};
+      catalogProdukById = {};
       const selectKasir = document.getElementById('kasirProduk');
-      selectKasir.innerHTML = '';
-
       const selectFokus = document.getElementById('produkFokusMingguan');
       const fokusLama = selectFokus ? selectFokus.value : '';
+      if (selectKasir) selectKasir.innerHTML = '';
       if (selectFokus) selectFokus.innerHTML = '';
 
-      items.forEach(item => {
-        let nama = 'Produk';
-        let harga = 0;
-        const colonIndex = item.lastIndexOf(':');
-        const parenMatch = item.match(/^(.*)\((\d+(?:[.,]\d+)?)\)$/);
-        if (colonIndex > 0) {
-          nama = item.slice(0, colonIndex).trim();
-          harga = parseInt(item.slice(colonIndex + 1).replace(/[^0-9]/g, ''), 10) || 0;
-        } else if (parenMatch) {
-          nama = parenMatch[1].trim();
-          harga = parseInt(parenMatch[2].replace(/[^0-9]/g, ''), 10) || 0;
-        } else {
-          nama = item.trim();
+      const textValue = products.map(p => `${p.name}:${Number(p.price) || 0}`).join(', ');
+      const input = document.getElementById('inputDaftarProduk');
+      if (input && products.length) input.value = textValue;
+
+      products.forEach(p => {
+        const harga = Number(p.price) || 0;
+        catalogProduk[p.name] = harga;
+        catalogProdukById[p.id] = { id: p.id, name: p.name, price: harga };
+
+        if (selectKasir) {
+          const option = document.createElement('option');
+          option.value = p.name;
+          option.innerText = `${p.name} (Rp ${harga.toLocaleString('id-ID')})`;
+          selectKasir.appendChild(option);
         }
-
-        catalogProduk[nama] = harga;
-
-        const option = document.createElement('option');
-        option.value = nama;
-        option.innerText = `${nama} (Rp ${harga.toLocaleString('id-ID')})`;
-        selectKasir.appendChild(option);
 
         if (selectFokus) {
           const optFokus = document.createElement('option');
-          optFokus.value = nama;
-          optFokus.innerText = nama;
+          optFokus.value = p.id;
+          optFokus.innerText = p.name;
           selectFokus.appendChild(optFokus);
         }
       });
 
-      if (selectFokus && fokusLama && catalogProduk[fokusLama] !== undefined) selectFokus.value = fokusLama;
-      else if (selectFokus && selectFokus.options.length && !selectFokus.value) selectFokus.selectedIndex = 0;
+      if (selectFokus && fokusLama && [...selectFokus.options].some(o => o.value === fokusLama)) {
+        selectFokus.value = fokusLama;
+      } else if (selectFokus && selectFokus.options.length) {
+        selectFokus.selectedIndex = 0;
+      }
       updateDashboard();
     }
 
@@ -463,36 +569,53 @@
       updateDashboard();
       clearTimeout(debounceMingguanTimer);
       debounceMingguanTimer = setTimeout(async () => {
-        const produk = document.getElementById('produkFokusMingguan').value;
-        const target = document.getElementById('targetMingguanPcs').value;
-        if (!produk) return;
+        const productId = document.getElementById('produkFokusMingguan').value;
+        const target = Math.max(0, parseInt(document.getElementById('targetMingguanPcs').value, 10) || 0);
+        if (!productId) return;
 
         if (isSupabaseConfigured) {
-          const r1 = await _supabase.from('app_config').upsert({ key: 'produkFokusMingguan', value: String(produk) }, { onConflict: 'key' });
-          const r2 = await _supabase.from('app_config').upsert({ key: 'targetMingguanPcs', value: String(target) }, { onConflict: 'key' });
-          if (r1.error || r2.error) {
-            console.error('Gagal simpan target mingguan:', r1.error || r2.error);
-          } else {
-            tampilkanNotifTersimpan();
+          const { error } = await _supabase
+            .from('settings')
+            .upsert({ id: 1, weekly_focus_product_id: productId, weekly_target_pcs: target }, { onConflict: 'id' });
+
+          if (error) {
+            console.error('Gagal simpan target mingguan:', error);
+            alert('❌ Target mingguan belum tersimpan.\n\n' + error.message);
+            return;
           }
+          tampilkanNotifTersimpan();
         } else {
-          localStorage.setItem('permProdukFokusMingguan', produk);
-          localStorage.setItem('permTargetMingguanPcs', target);
+          localStorage.setItem('permProdukFokusMingguan', productId);
+          localStorage.setItem('permTargetMingguanPcs', String(target));
         }
+        updateDashboard();
       }, 500);
     }
 
     async function muatTargetMingguanCloud() {
       if (isSupabaseConfigured) {
-        const { data: produk } = await _supabase.from('app_config').select('value').eq('key', 'produkFokusMingguan').maybeSingle();
-        const { data: target } = await _supabase.from('app_config').select('value').eq('key', 'targetMingguanPcs').maybeSingle();
-        if (target && target.value !== null) document.getElementById('targetMingguanPcs').value = target.value;
-        if (produk && produk.value) document.getElementById('produkFokusMingguan').value = produk.value;
+        const { data, error } = await _supabase
+          .from('settings')
+          .select('weekly_focus_product_id, weekly_target_pcs')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Gagal membaca target mingguan:', error);
+          return;
+        }
+        if (data) {
+          const selectFokus = document.getElementById('produkFokusMingguan');
+          if (selectFokus && data.weekly_focus_product_id) selectFokus.value = data.weekly_focus_product_id;
+          if (data.weekly_target_pcs !== null && data.weekly_target_pcs !== undefined) {
+            document.getElementById('targetMingguanPcs').value = data.weekly_target_pcs;
+          }
+        }
       } else {
         const produk = localStorage.getItem('permProdukFokusMingguan');
         const target = localStorage.getItem('permTargetMingguanPcs');
-        if (target) document.getElementById('targetMingguanPcs').value = target;
         if (produk) document.getElementById('produkFokusMingguan').value = produk;
+        if (target) document.getElementById('targetMingguanPcs').value = target;
       }
       updateDashboard();
     }
